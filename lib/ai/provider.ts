@@ -1,66 +1,26 @@
 import { createGoogle } from "@ai-sdk/google";
 import { generateText, Output } from "ai";
 import { z } from "zod";
-import { plantProject, updateConnection } from "@/lib/project/demo-project";
-import { ProjectSchema, validateProject, type Project } from "@/lib/project/schema";
+import { ProjectSchema, type Project } from "@/lib/project/schema";
 
-const GenerationRequestSchema = z.object({ prompt: z.string().trim().min(8).max(4000), constraints: z.object({ controller: z.string().optional(), available: z.array(z.string()).optional(), budget: z.string().optional(), requirements: z.array(z.string()).optional() }).optional() });
+const GenerationRequestSchema = z.object({ prompt: z.string().trim().min(8).max(8000), projectId: z.string().min(1).optional(), constraints: z.object({ controller: z.string().optional(), available: z.array(z.string()).optional(), budget: z.string().optional(), requirements: z.array(z.string()).optional() }).optional() });
 const RevisionRequestSchema = z.object({ project: ProjectSchema, request: z.string().trim().min(2).max(2000) });
 const GenerationOutputSchema = z.object({ project: ProjectSchema.nullable(), questions: z.array(z.string()) });
+const DESIGN_INSTRUCTIONS = `You are ProtoPilot, an electronics design assistant. Create an editable and electrically cautious hardware design.
+Never connect a pump, motor, or other load directly to a microcontroller GPIO. Use a suitable driver, flyback protection for inductive DC loads, the load's separate supply, and common ground where required. Keep water away from exposed electronics.
+Do not invent exact component ratings. Use "unknown" status and add a warning when a part's exact rating is unknown. If an unknown rating can be resolved by selecting a correctly rated part later, continue the design with a clear requirement. Ask a clarification only when a missing fact prevents choosing a safe design. Never ask again for a value the user already supplied. Ask no more than two short, specific questions. Never say that a design is guaranteed safe or functional.
+Every project must match the supplied schema, include valid component/pin references, a wiring-ready connection list, Arduino firmware, build steps, assumptions, and warnings.`;
 
 export type GenerateRequest = z.infer<typeof GenerationRequestSchema>;
 export type RevisionRequest = z.infer<typeof RevisionRequestSchema>;
-export type GenerateResult = { project: Project | null; questions: string[]; mode: "mock" | "gemma" };
-export type RevisionResult = { project: Project; message: string; mode: "mock" | "gemma" };
+export type GenerateResult = { project: Project | null; questions: string[] };
+export type RevisionResult = { project: Project; message: string };
 
 export const AiRequest = { generation: GenerationRequestSchema, revision: RevisionRequestSchema };
 
 export interface ProjectProvider {
   generate(request: GenerateRequest): Promise<GenerateResult>;
   revise(request: RevisionRequest): Promise<RevisionResult>;
-}
-
-class MockProvider implements ProjectProvider {
-  async generate({ prompt }: GenerateRequest): Promise<GenerateResult> {
-    if (/plant|soil|water|watering|moisture|pump/i.test(prompt)) {
-      const project = validateProject({ ...plantProject, id: `plant-${crypto.randomUUID()}`, revision: 0, prompt });
-      return { project, questions: [], mode: "mock" };
-    }
-    return {
-      project: null,
-      questions: [
-        "Which controller should the design use (ESP32, Arduino Uno, or another board)?",
-        "What should the device sense or control, and what parts do you already have?",
-      ],
-      mode: "mock",
-    };
-  }
-
-  async revise({ project, request }: RevisionRequest): Promise<RevisionResult> {
-    const pinRequest = request.match(/\b(?:to|use|on|at)\s*gpio\s*(34|35)\b/i)
-      ?? request.match(/\bgpio\s*(34|35)\b(?!.*\bgpio\s*(?:34|35)\b)/i)
-      ?? request.match(/(?:moisture|sensor|analog|adc).{0,50}gpio\s*(34|35)/i);
-    const chosenPin = pinRequest?.[1] ?? pinRequest?.[2];
-    if (chosenPin && project.connections.some((connection) => connection.id === "c3")) {
-      const updated = updateConnection(project, "c3", `gpio${chosenPin}`);
-      const source = updated.firmware.source.replace(/MOISTURE_PIN\s*=\s*\d+/, `MOISTURE_PIN = ${chosenPin}`);
-      return {
-        project: validateProject({ ...updated, firmware: { ...updated.firmware, source } }),
-        message: `Moved the moisture input to GPIO${chosenPin}. The schematic, breadboard, wiring table, and firmware use the updated pin.`,
-        mode: "mock",
-      };
-    }
-
-    if (/why|explain|purpose/i.test(request)) {
-      return { project, message: "The MOSFET switches the pump current from its external supply. The ESP32 GPIO only controls the MOSFET gate, and the diode limits the pump's inductive voltage spike.", mode: "mock" };
-    }
-
-    return {
-      project,
-      message: "The mock provider can demonstrate changing the moisture input between GPIO34 and GPIO35, or explain the pump driver. Configure Gemma for general design revisions.",
-      mode: "mock",
-    };
-  }
 }
 
 class GemmaProvider implements ProjectProvider {
@@ -70,9 +30,10 @@ class GemmaProvider implements ProjectProvider {
     this.model = createGoogle({ apiKey })(model);
   }
 
-  private async askObject<T>(prompt: string, schema: z.ZodType<T>): Promise<T> {
+  private async askObject<T>(instructions: string, prompt: string, schema: z.ZodType<T>): Promise<T> {
     const { output } = await generateText({
       model: this.model,
+      instructions,
       prompt,
       output: Output.object({ schema }),
       temperature: 0.2,
@@ -85,8 +46,7 @@ class GemmaProvider implements ProjectProvider {
   }
 
   async generate(request: GenerateRequest): Promise<GenerateResult> {
-    const output = await this.askObject(`You are an electronics design assistant. Return an object with "project" (a complete project object matching the schema, or null while clarification is needed) and "questions" (an array of targeted strings). Do not invent component ratings. Use status "unknown" when exact ratings are not known. Every project must include schemaVersion 1, id, revision, title, prompt, summary, operatingPrinciple, constraints, components with pin identifiers and specs, connections, powerDomains, firmware, buildSteps, assumptions, warnings, and clarificationQuestions. Never connect a pump or motor directly to a microcontroller GPIO. Include a switching driver, flyback protection for inductive DC loads, external load supply, and shared ground where needed. Ask questions and set project to null when a safe meaningful design needs missing facts. Make assumptions explicit. Ensure each connection references a real component and pin. Output JavaScript/Arduino firmware appropriate to the chosen board.
-
+    const output = await this.askObject(DESIGN_INSTRUCTIONS, `Return an object with "project" (a complete project matching the schema, or null only if a safe design cannot be selected) and "questions" (up to two short questions).
 USER REQUEST:
 ${request.prompt}
 
@@ -94,29 +54,25 @@ OPTIONAL CONSTRAINTS:
 ${JSON.stringify(request.constraints ?? {})}
 
 EXAMPLE:
-{"project":null,"questions":["Which exact pump voltage and startup current are printed on its label?"]}`, GenerationOutputSchema);
-    return { ...output, mode: "gemma" };
+{"project":null,"questions":["What voltage and startup current are printed on the pump label?"]}`, GenerationOutputSchema);
+    return { ...output, project: output.project && request.projectId ? { ...output.project, id: request.projectId } : output.project };
   }
 
   async revise({ project, request }: RevisionRequest): Promise<RevisionResult> {
     const resultSchema = z.object({ project: ProjectSchema, message: z.string().min(1) });
-    const output = await this.askObject(`Revise this electronics project according to the requested change. Return an object with "project" containing the complete revised project and "message" containing a short explanation. Keep schemaVersion 1. Increment revision. Preserve unknown/assumed electrical ratings unless the user supplies exact datasheet values. Keep all pins and connections internally consistent. Never drive a pump/motor directly from a controller GPIO. The UI derives diagrams, wiring, and checks directly from this project, so update the structured data, firmware, assumptions and warnings as needed.
-
+    const output = await this.askObject(`${DESIGN_INSTRUCTIONS}\nFor revisions, keep schemaVersion 1, increment revision, preserve unknown/assumed values, and keep the project, firmware, connections, and component pins consistent.`, `Return an object with "project" containing the complete revised project and "message" containing a short explanation.
 CURRENT PROJECT:
 ${JSON.stringify(project)}
 
 USER CHANGE:
 ${request}`, resultSchema);
-    return { ...output, mode: "gemma" };
+    return output;
   }
 }
 
 export function getProjectProvider(): ProjectProvider {
-  const provider = process.env.AI_PROVIDER ?? "mock";
-  if (provider === "mock") return new MockProvider();
-  if (provider !== "gemma") throw new Error(`Unsupported AI_PROVIDER: ${provider}`);
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is required when AI_PROVIDER=gemma.");
+  if (!apiKey) throw new Error("GEMINI_API_KEY is required to run the Gemma 4 assistant.");
   const model = process.env.GEMMA_MODEL ?? "gemma-4-26b-a4b-it";
   return new GemmaProvider(apiKey, model);
 }

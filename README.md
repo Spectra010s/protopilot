@@ -1,6 +1,6 @@
 # ProtoPilot
 
-CircuitCraft turns a hardware idea into an editable project representation with components, electrical pins, connections, a breadboard layout, a schematic, firmware, assembly notes, and deterministic checks.
+ProtoPilot turns a hardware idea into an editable project representation with components, electrical pins, connections, a breadboard layout, a schematic, firmware, assembly notes, and deterministic checks.
 
 ## Run locally
 
@@ -20,12 +20,9 @@ pnpm build
 
 ## AI provider
 
-The default provider is a local mock, so the demo works without credentials. It generates the plant watering fixture for plant/soil/watering requests, asks clarification questions for other prompts, and demonstrates changing the moisture input between GPIO34 and GPIO35.
-
-To enable Gemma 4, copy `.env.example` to `.env.local`, set `AI_PROVIDER=gemma`, and add a server-side Google AI Studio key. The app uses Vercel AI SDK with its Google provider; the default model ID is `gemma-4-26b-a4b-it` and can be overridden with `GEMMA_MODEL`:
+The app uses Gemma 4 through Vercel AI SDK and the Google provider. Copy `.env.example` to `.env.local`, add a server-side Google AI Studio key, and use the documented Gemma 4 model ID:
 
 ```env
-AI_PROVIDER=gemma
 GEMINI_API_KEY=your-server-side-key
 GEMMA_MODEL=gemma-4-26b-a4b-it
 ```
@@ -37,7 +34,7 @@ Gemma 4 model IDs currently documented for Gemini API include `gemma-4-26b-a4b-i
 1. Describe a plant watering system and select **Generate**.
 2. Inspect its components, ratings, connections, firmware, and engineering checks.
 3. Switch between **Breadboard** and **Schematic**. Both SVG views and the wiring table use the same versioned project data.
-4. Use **Change test connection**, or ask the mock assistant to move the moisture input to GPIO35. The connection and firmware update, and both views and the wiring table re-render from the changed project.
+4. Ask Gemma to move the moisture input to GPIO35. The connection and firmware update, and both views and the wiring table re-render from the changed project.
 5. Reload the page; the current project and conversation are restored from browser IndexedDB. Open **My projects** to reopen another saved design on this device.
 
 ## Engineering limits
