@@ -97,6 +97,16 @@ export default function WorkbenchPage() {
     if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
   }, [conversation.length, chatReply, project?.id]);
 
+  // Disable background scrolling when expanded artifact/image modal is open
+  useEffect(() => {
+    if (!expandedArtifact) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [expandedArtifact]);
+
   // Initial load from IndexedDB
   useEffect(() => {
     let active = true;
@@ -1167,8 +1177,8 @@ export default function WorkbenchPage() {
         </SheetContent>
       </Sheet>
       {expandedArtifact && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3" role="dialog" aria-modal="true" aria-label="Expanded design result" onClick={() => setExpandedArtifact(null)}>
-          <div className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 overscroll-contain" role="dialog" aria-modal="true" aria-label="Expanded design result" onClick={() => setExpandedArtifact(null)}>
+          <div className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl overscroll-contain" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
               <strong className="text-sm text-ink-strong">{expandedArtifact.kind === "code" ? expandedArtifact.project.firmware.filename : expandedArtifact.kind === "schematic" ? "Schematic" : "Circuit diagram"}</strong>
               {expandedArtifact.kind === "code" && <CopyCodeButton source={expandedArtifact.project.firmware.source} />}
