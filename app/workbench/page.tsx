@@ -82,6 +82,7 @@ export default function WorkbenchPage() {
   const [showAllSteps, setShowAllSteps] = useState(false);
 
   const diagramContainerRef = useRef<HTMLDivElement | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const generationControllerRef = useRef<AbortController | null>(null);
 
   const conversation = conversations[project?.id ?? sessionId] ?? [];
@@ -89,6 +90,10 @@ export default function WorkbenchPage() {
   const wiring = useMemo(() => (project ? deriveWiringTable(project) : []), [project]);
   const failCount = checks.filter((item) => item.status === "fail").length;
   const warningCount = checks.filter((item) => item.status === "warning" || item.status === "unverified").length;
+
+  useEffect(() => {
+    if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+  }, [conversation.length, chatReply, project?.id]);
 
   // Initial load from IndexedDB
   useEffect(() => {
@@ -467,7 +472,7 @@ export default function WorkbenchPage() {
               </div>
 
               {/* Chat Messages Body */}
-              <div className="p-5 space-y-4 max-h-[440px] overflow-y-auto">
+              <div ref={chatScrollRef} className="p-5 space-y-4 max-h-[440px] overflow-y-auto">
                 {conversation.length > 0 ? (
                   conversation.map((msg) => (
                     <div
@@ -955,7 +960,7 @@ export default function WorkbenchPage() {
                   <span><span className={"inline-block size-[5px] rounded-full bg-pass"} />Gemma 4 · Online</span>
                 </div>
               </div>
-              <div className={"space-y-2.5 p-[13px] max-h-[320px] overflow-y-auto"}>
+              <div ref={chatScrollRef} className={"space-y-2.5 p-[13px] max-h-[320px] overflow-y-auto"}>
                 {conversation.length ? (
                   conversation.map((message) => (
                     <div
@@ -974,6 +979,12 @@ export default function WorkbenchPage() {
                   <div className={"rounded-[9px_9px_9px_3px] border border-line-soft bg-subtle p-2.5 [&>p]:m-0 [&>p]:text-[10px] [&>p]:leading-[1.55] [&>p]:text-body [&>span]:mt-[7px] [&>span]:block [&>span]:text-[8px] [&>span]:text-faint"}>
                     <p>Assistant ready for <strong>{project.title}</strong>. Ask to swap pins, add components, or modify thresholds.</p>
                     <span>Assistant · Ready</span>
+                  </div>
+                )}
+                {busy && !chatReply && <p className="text-[10px] text-quiet">ProtoPilot is responding… {generationSeconds}s</p>}
+                {chatReply && !conversation.some((message) => message.content === chatReply) && (
+                  <div className="rounded-[9px_9px_9px_3px] border border-line-soft bg-subtle p-2.5 text-[10px] leading-[1.55] text-body">
+                    <AssistantMarkdown>{chatReply}</AssistantMarkdown>
                   </div>
                 )}
                 <div className={"mt-2.5 flex items-start gap-1.5 text-[9px] leading-[1.45] text-quiet [&>svg]:shrink-0 [&>svg]:text-faint"}>
