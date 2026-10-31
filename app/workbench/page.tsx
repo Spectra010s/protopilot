@@ -778,8 +778,8 @@ export default function WorkbenchPage() {
                       workbenchSubView === "overview" ? "bg-white text-ink-strong shadow-sm font-semibold" : "text-quiet hover:text-ink"
                     )}
                   >
-                    <LayoutGrid size={13} />
-                    <span>Schema View</span>
+                    <Database size={13} />
+                    <span>Schema ERD</span>
                   </button>
                   <button
                     type="button"
@@ -862,214 +862,7 @@ export default function WorkbenchPage() {
             {/* Workbench Body */}
             <div className="flex-1">
               {workbenchSubView === "overview" && (
-                /* ── Schema Overview with Connected Rectangle Nodes ── */
-                <div className="min-h-[calc(100vh-125px)] [background-image:radial-gradient(#cbd5e1_1.25px,transparent_1.25px)] [background-size:24px_24px] p-6 sm:p-10">
-                  <div className="mx-auto max-w-[1100px]">
-                    {/* Overview Header Banner */}
-                    <div className="mb-8 rounded-2xl border border-line bg-white p-5 shadow-panel">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-brand">System Architecture</span>
-                          <h3 className="mt-1 text-base font-bold text-ink-strong">{project.title}</h3>
-                          <p className="mt-1 text-xs text-body leading-relaxed">{project.operatingPrinciple}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab("chat")}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-line px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand-soft shrink-0 cursor-pointer"
-                        >
-                          <Bot size={13} /> Talk in Chat
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Schema Flow: Connected Nodes */}
-                    <div className="relative flex flex-col items-center gap-3">
-                      {/* Node 1: Components & BOM */}
-                      <div className="w-full max-w-[760px] rounded-2xl border border-line bg-white p-5 shadow-panel hover:border-brand/50 transition">
-                        <div className="flex items-center justify-between border-b border-line-soft pb-3 mb-3">
-                          <div className="flex items-center gap-2.5">
-                            <div className="grid size-8 place-items-center rounded-lg bg-sensor-soft text-sensor">
-                              <Layers3 size={17} />
-                            </div>
-                            <div>
-                              <h4 className="text-xs font-bold text-ink-strong uppercase tracking-wide">Components &amp; BOM</h4>
-                              <p className="text-[11px] text-faint">{project.components.length} components selected</p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setWorkbenchSubView("wiring")}
-                            className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1 text-[11px] font-medium text-brand hover:bg-brand-soft cursor-pointer"
-                          >
-                            Inspect Parts <ArrowRight size={12} />
-                          </button>
-                        </div>
-
-                        {/* Part pills preview */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                          {project.components.slice(0, 3).map((comp) => (
-                            <div key={comp.id} className="flex items-center gap-2 rounded-xl bg-subtle/70 p-2.5 border border-line-soft">
-                              <div className="grid size-6 place-items-center rounded-md bg-white text-ink text-[10px] font-mono shadow-xs">
-                                <PartIcon category={comp.category} />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-[11px] font-semibold text-ink-strong truncate">{comp.name}</p>
-                                <p className="text-[9px] text-quiet font-mono truncate">{comp.reference}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Dotted Connector 1 -> 2 */}
-                      <div className="flex flex-col items-center">
-                        <div className="w-0.5 h-5 border-l-2 border-dashed border-brand/50" />
-                        <div className="size-2 rounded-full bg-brand" />
-                        <div className="w-0.5 h-5 border-l-2 border-dashed border-brand/50" />
-                      </div>
-
-                      {/* Node 2: Wiring Matrix */}
-                      <div className="w-full max-w-[760px] rounded-2xl border border-line bg-white p-5 shadow-panel hover:border-brand/50 transition">
-                        <div className="flex items-center justify-between border-b border-line-soft pb-3 mb-3">
-                          <div className="flex items-center gap-2.5">
-                            <div className="grid size-8 place-items-center rounded-lg bg-power-soft text-power">
-                              <Cable size={17} />
-                            </div>
-                            <div>
-                              <h4 className="text-xs font-bold text-ink-strong uppercase tracking-wide">Pin Netlist &amp; Wiring</h4>
-                              <p className="text-[11px] text-faint">{wiring.length} pin connections auto-routed</p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setWorkbenchSubView("wiring")}
-                            className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1 text-[11px] font-medium text-brand hover:bg-brand-soft cursor-pointer"
-                          >
-                            View Wiring Table <ArrowRight size={12} />
-                          </button>
-                        </div>
-
-                        {/* Net badges */}
-                        <div className="flex flex-wrap items-center gap-2">
-                          {Array.from(new Set(wiring.map((w) => w.net))).slice(0, 8).map((net) => (
-                            <span key={net} className="inline-flex items-center gap-1 rounded-md bg-chip px-2 py-1 text-[10px] font-mono text-ink">
-                              <span className="size-1.5 rounded-full bg-brand" />
-                              {net}
-                            </span>
-                          ))}
-                          {wiring.length > 8 && (
-                            <span className="text-[10px] text-quiet font-medium">+{wiring.length - 8} more</span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Dotted Connector 2 -> 3 */}
-                      <div className="flex flex-col items-center">
-                        <div className="w-0.5 h-5 border-l-2 border-dashed border-brand/50" />
-                        <div className="size-2 rounded-full bg-brand" />
-                        <div className="w-0.5 h-5 border-l-2 border-dashed border-brand/50" />
-                      </div>
-
-                      {/* Stage 3: Generated Outputs Grid */}
-                      <div className="grid w-full max-w-[960px] grid-cols-1 md:grid-cols-2 gap-5">
-                        {/* Node 3A: Interactive Circuit Diagram */}
-                        <div className="flex flex-col rounded-2xl border border-line bg-white p-5 shadow-panel hover:border-brand/50 transition">
-                          <div className="flex items-center justify-between border-b border-line-soft pb-3 mb-3">
-                            <div className="flex items-center gap-2.5">
-                              <div className="grid size-8 place-items-center rounded-lg bg-brand-soft text-brand">
-                                <CircuitBoard size={17} />
-                              </div>
-                              <div>
-                                <h4 className="text-xs font-bold text-ink-strong uppercase tracking-wide">Circuit Canvas</h4>
-                                <p className="text-[11px] text-faint">Vector Breadboard &amp; Schematic</p>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setWorkbenchSubView("circuit")}
-                              className="inline-flex items-center gap-1 rounded-lg bg-brand px-3 py-1 text-[11px] font-semibold text-white shadow-button hover:bg-brand-strong cursor-pointer"
-                            >
-                              Open Fullscreen <ArrowRight size={12} />
-                            </button>
-                          </div>
-
-                          {/* Interactive preview box */}
-                          <div
-                            onClick={() => setWorkbenchSubView("circuit")}
-                            className="group relative flex-1 min-h-[180px] overflow-hidden rounded-xl border border-line-soft bg-canvas cursor-pointer grid place-items-center p-2"
-                          >
-                            <div className="w-full max-h-[160px] flex items-center justify-center pointer-events-none">
-                              <BreadboardView project={project} />
-                            </div>
-                            <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/10 transition-colors grid place-items-center">
-                              <span className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1 rounded-lg bg-white/95 px-3 py-1.5 text-xs font-semibold text-brand shadow-md">
-                                <ZoomIn size={14} /> Click to Open Fullscreen
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Node 3B: Arduino Firmware Code */}
-                        <div className="flex flex-col rounded-2xl border border-line bg-white p-5 shadow-panel hover:border-brand/50 transition">
-                          <div className="flex items-center justify-between border-b border-line-soft pb-3 mb-3">
-                            <div className="flex items-center gap-2.5">
-                              <div className="grid size-8 place-items-center rounded-lg bg-chip text-quiet">
-                                <FileCode2 size={17} />
-                              </div>
-                              <div>
-                                <h4 className="text-xs font-bold text-ink-strong uppercase tracking-wide">Arduino Firmware</h4>
-                                <p className="text-[11px] text-faint">{project.firmware.filename} · {project.firmware.board || "ESP32"}</p>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setWorkbenchSubView("code")}
-                              className="inline-flex items-center gap-1 rounded-lg bg-brand px-3 py-1 text-[11px] font-semibold text-white shadow-button hover:bg-brand-strong cursor-pointer"
-                            >
-                              Open Fullscreen <ArrowRight size={12} />
-                            </button>
-                          </div>
-
-                          {/* Code preview box */}
-                          <div
-                            onClick={() => setWorkbenchSubView("code")}
-                            className="group relative flex-1 min-h-[180px] overflow-hidden rounded-xl border border-code-line bg-code cursor-pointer p-3 font-mono text-[10px] text-code-ink leading-relaxed"
-                          >
-                            <pre className="max-h-[150px] overflow-hidden select-none">
-                              <code>{project.firmware.source.split("\n").slice(0, 8).join("\n") + "\n// ..."}</code>
-                            </pre>
-                            <div className="absolute inset-0 bg-slate-950/0 group-hover:bg-slate-950/40 transition-colors grid place-items-center">
-                              <span className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1 rounded-lg bg-white/95 px-3 py-1.5 text-xs font-semibold text-brand shadow-md">
-                                <FileCode2 size={14} /> Click to View Code
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Node 3C: Engineering Checks Footer Card */}
-                      <div className="w-full max-w-[960px] rounded-2xl border border-line bg-white p-4 shadow-panel mt-1">
-                        <div className="flex items-center justify-between flex-wrap gap-2">
-                          <div className="flex items-center gap-2">
-                            <ShieldCheck size={16} className="text-brand" />
-                            <span className="text-xs font-bold text-ink-strong">Electrical Compatibility</span>
-                            <span className={cn(
-                              "rounded-md px-2 py-0.5 text-[10px] font-semibold",
-                              failCount ? "bg-danger-soft text-danger" : "bg-pass-soft text-pass-ink"
-                            )}>
-                              {failCount ? `${failCount} issues` : warningCount ? `${warningCount} warnings` : "All Checks Passed"}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3 text-[10px] text-quiet">
-                            <span>GPIO Voltage: Passed</span>
-                            <span>Flyback Protection: Verified</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <DatabaseSchemaView project={project} onOpenView={(v) => setWorkbenchSubView(v)} />
               )}
 
               {workbenchSubView === "circuit" && (
@@ -1616,4 +1409,198 @@ function PartIcon({ category }: { category: string }) {
   if (category === "input") return <Plus size={16} />;
   if (category === "protection") return <ShieldCheck size={16} />;
   return <CircuitBoard size={16} />;
+}
+
+function DatabaseSchemaView({
+  project,
+  onOpenView,
+}: {
+  project: Project;
+  onOpenView: (subView: WorkbenchSubView) => void;
+}) {
+  const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
+
+  // Group connections by component and pin
+  const connectionsByPin = useMemo(() => {
+    const map = new Map<string, Array<{ wireId: string; net: string; color: string; otherComp: string; otherPin: string }>>();
+    project.connections.forEach((wire) => {
+      const fromKey = `${wire.from.componentId}:${wire.from.pinId}`;
+      const toKey = `${wire.to.componentId}:${wire.to.pinId}`;
+      const fromComp = project.components.find((c) => c.id === wire.from.componentId);
+      const toComp = project.components.find((c) => c.id === wire.to.componentId);
+
+      const fromList = map.get(fromKey) ?? [];
+      fromList.push({
+        wireId: wire.id,
+        net: wire.net,
+        color: wire.color,
+        otherComp: toComp?.reference ?? wire.to.componentId,
+        otherPin: wire.to.pinId,
+      });
+      map.set(fromKey, fromList);
+
+      const toList = map.get(toKey) ?? [];
+      toList.push({
+        wireId: wire.id,
+        net: wire.net,
+        color: wire.color,
+        otherComp: fromComp?.reference ?? wire.from.componentId,
+        otherPin: wire.from.pinId,
+      });
+      map.set(toKey, toList);
+    });
+    return map;
+  }, [project]);
+
+  return (
+    <div className="min-h-[calc(100vh-125px)] bg-canvas [background-image:radial-gradient(#cbd5e1_1.25px,transparent_1.25px)] [background-size:24px_24px] p-6 sm:p-10">
+      <div className="mx-auto max-w-[1400px]">
+        {/* ERD Schema Header */}
+        <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2">
+              <Database size={18} className="text-brand" />
+              <h3 className="text-sm font-bold text-ink-strong uppercase tracking-wider">Hardware Entity Schema (ERD View)</h3>
+              <span className="rounded-md bg-brand-soft px-2 py-0.5 text-[10px] font-semibold text-brand-ink">
+                {project.components.length} entities · {project.connections.length} relationships
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-body">
+              Entity-relationship table view showing component schemas, pin fields, data types, and foreign net relationships.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onOpenView("circuit")}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-body hover:bg-subtle cursor-pointer shadow-xs"
+            >
+              <CircuitBoard size={13} className="text-brand" /> Open CAD Canvas
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenView("code")}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-body hover:bg-subtle cursor-pointer shadow-xs"
+            >
+              <FileCode2 size={13} className="text-brand" /> Open Firmware Code
+            </button>
+          </div>
+        </div>
+
+        {/* ERD Entity Tables Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+          {project.components.map((comp) => {
+            const isSelected = selectedComponentId === comp.id;
+            return (
+              <div
+                key={comp.id}
+                onClick={() => setSelectedComponentId(isSelected ? null : comp.id)}
+                className={cn(
+                  "overflow-hidden rounded-2xl border bg-white shadow-panel transition cursor-pointer",
+                  isSelected ? "border-brand ring-2 ring-brand/20 shadow-md" : "border-line hover:border-brand/60"
+                )}
+              >
+                {/* Table Header: ERD Entity Title */}
+                <div className="flex items-center justify-between border-b border-line bg-subtle/60 px-4 py-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-white border border-line-soft font-mono text-xs font-bold text-brand shadow-2xs">
+                      {comp.reference}
+                    </span>
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-bold text-ink-strong truncate">{comp.name}</h4>
+                      <p className="text-[10px] text-faint font-mono">entity: {comp.partId}</p>
+                    </div>
+                  </div>
+                  <span className={cn(
+                    "rounded-md px-2 py-0.5 text-[9px] font-mono uppercase font-semibold shrink-0",
+                    comp.category === "controller" ? "bg-controller-soft text-controller" :
+                    comp.category === "sensor" ? "bg-sensor-soft text-sensor" :
+                    comp.category === "driver" ? "bg-driver-soft text-driver" :
+                    comp.category === "power" ? "bg-power-soft text-power" : "bg-chip text-quiet"
+                  )}>
+                    {comp.category}
+                  </span>
+                </div>
+
+                {/* Table Schema Fields: Pins & Foreign Net Relationships */}
+                <div className="divide-y divide-line-soft/60">
+                  <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 bg-inset/50 px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-faint">
+                    <span>Port</span>
+                    <span>Field &amp; Type</span>
+                    <span className="text-right">Foreign Link / Net</span>
+                  </div>
+
+                  {comp.pins.map((pin) => {
+                    const links = connectionsByPin.get(`${comp.id}:${pin.id}`) ?? [];
+                    const isLinked = links.length > 0;
+                    return (
+                      <div
+                        key={pin.id}
+                        className={cn(
+                          "grid grid-cols-[auto_1fr_auto] items-center gap-2.5 px-3 py-2 text-xs transition-colors",
+                          isLinked ? "bg-white hover:bg-brand-soft/10" : "bg-subtle/20 text-faint"
+                        )}
+                      >
+                        {/* Port connection dot indicator */}
+                        <div className="flex items-center">
+                          <span
+                            className={cn(
+                              "size-2 rounded-full",
+                              isLinked
+                                ? links[0].color === "red"
+                                  ? "bg-red-500 ring-2 ring-red-200"
+                                  : links[0].color === "black"
+                                  ? "bg-slate-900 ring-2 ring-slate-300"
+                                  : "bg-brand ring-2 ring-brand-soft"
+                                : "bg-slate-300"
+                            )}
+                            title={isLinked ? `Connected via ${links[0].net}` : "Unconnected"}
+                          />
+                        </div>
+
+                        {/* Pin Name & Kind */}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-[11px] font-semibold text-ink-strong">{pin.label || pin.id}</span>
+                            <span className="rounded bg-chip/60 px-1.5 py-0.5 text-[9px] font-mono text-quiet">{pin.kind}</span>
+                          </div>
+                        </div>
+
+                        {/* Connected Net / Foreign Key Table Reference */}
+                        <div className="text-right">
+                          {isLinked ? (
+                            <div className="flex flex-col items-end gap-0.5">
+                              {links.map((link, idx) => (
+                                <span
+                                  key={idx}
+                                  className="inline-flex items-center gap-1 rounded-md bg-chip px-1.5 py-0.5 text-[9px] font-mono text-ink font-medium"
+                                  title={`Connected to ${link.otherComp}.${link.otherPin}`}
+                                >
+                                  <span className="text-brand">⇄</span>
+                                  <span className="truncate max-w-[95px]">{link.otherComp}.{link.otherPin}</span>
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-faint italic">—</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Table Footer */}
+                <div className="flex items-center justify-between border-t border-line-soft bg-subtle/40 px-3.5 py-2 text-[10px] text-quiet">
+                  <span>{comp.pins.length} schema fields</span>
+                  <span className="text-brand font-medium">Click to inspect</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
