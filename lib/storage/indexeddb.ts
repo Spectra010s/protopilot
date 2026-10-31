@@ -193,6 +193,26 @@ export async function listProjectImages(projectId: string): Promise<ProjectImage
   return rows.map(({ blob: _blob, ...asset }) => asset).sort((a, b) => a.createdAt - b.createdAt);
 }
 
+export async function deleteProjectDraft(id: string): Promise<void> {
+  const database = await getDatabase();
+  await database.delete("projects", id);
+  try {
+    const messages = await database.getAllFromIndex("messages", "by-project-created", IDBKeyRange.bound([id, 0], [id, Infinity]));
+    for (const msg of messages) {
+      await database.delete("messages", msg.id);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export async function clearAllProjects(): Promise<void> {
+  const database = await getDatabase();
+  await database.clear("projects");
+  await database.clear("messages");
+  await database.clear("images");
+}
+
 export async function deleteProjectImage(id: string): Promise<void> {
   const database = await getDatabase();
   await database.delete("images", id);

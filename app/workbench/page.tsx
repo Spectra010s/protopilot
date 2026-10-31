@@ -34,6 +34,7 @@ import {
   Sparkles,
   Sprout,
   Square,
+  Trash2,
   Waves,
   Cable,
   Cpu,
@@ -57,6 +58,8 @@ import {
 } from "@/components/ui/sheet";
 import {
   addProjectMessage,
+  deleteProjectDraft,
+  clearAllProjects,
   getProjectDraft,
   listProjectDrafts,
   listProjectMessages,
@@ -192,6 +195,36 @@ export default function WorkbenchPage() {
       setConversations((current) => ({ ...current, [id]: messages }));
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not open project");
+    }
+  }
+
+  async function handleDeleteProject(id: string) {
+    try {
+      await deleteProjectDraft(id);
+      const drafts = await listProjectDrafts();
+      setProjectDrafts(drafts);
+      if (project?.id === id) {
+        setProject(null);
+        setSessionId(createId());
+        setActiveTab("chat");
+      }
+      setNotice("Project deleted.");
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not delete project");
+    }
+  }
+
+  async function handleClearAll() {
+    try {
+      await clearAllProjects();
+      setProjectDrafts([]);
+      setProject(null);
+      setSessionId(createId());
+      setConversations({});
+      setActiveTab("chat");
+      setNotice("All local projects and history cleared.");
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not clear data");
     }
   }
 
@@ -1245,22 +1278,34 @@ export default function WorkbenchPage() {
           <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1.5">
             {projectDrafts.length ? (
               projectDrafts.map((draft) => (
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-3 rounded-xl border border-line bg-subtle/50 px-3 py-3 text-left hover:border-brand hover:bg-brand-soft/20 cursor-pointer transition-colors"
+                <div
                   key={draft.id}
-                  onClick={() => void openSavedProject(draft.id)}
+                  className="flex w-full items-center justify-between gap-2 rounded-xl border border-line bg-subtle/50 px-3 py-2.5 text-left hover:border-brand hover:bg-brand-soft/20 transition-colors"
                 >
-                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
-                    <CircuitBoard size={16} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <strong className="block text-xs font-semibold text-ink-strong truncate">{draft.title}</strong>
-                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-quiet">
-                      <span>{new Date(draft.updatedAt).toLocaleDateString([], { month: "short", day: "numeric" })}</span>
+                  <button
+                    type="button"
+                    className="flex flex-1 items-center gap-3 min-w-0 bg-transparent border-0 p-0 text-left cursor-pointer"
+                    onClick={() => void openSavedProject(draft.id)}
+                  >
+                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
+                      <CircuitBoard size={16} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <strong className="block text-xs font-semibold text-ink-strong truncate">{draft.title}</strong>
+                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-quiet">
+                        <span>{new Date(draft.updatedAt).toLocaleDateString([], { month: "short", day: "numeric" })}</span>
+                      </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteProject(draft.id)}
+                    className="grid size-7 place-items-center rounded-lg text-quiet hover:text-danger hover:bg-danger-soft/40 cursor-pointer transition shrink-0"
+                    title="Delete project"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               ))
             ) : (
               <div className="py-12 text-center text-xs text-quiet">
@@ -1270,6 +1315,17 @@ export default function WorkbenchPage() {
               </div>
             )}
           </div>
+          {projectDrafts.length > 0 && (
+            <div className="p-3 border-t border-line bg-subtle/30">
+              <button
+                type="button"
+                onClick={() => void handleClearAll()}
+                className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-line-strong bg-white px-3 py-2 text-xs font-medium text-danger hover:bg-danger-soft/20 cursor-pointer transition"
+              >
+                <Trash2 size={13} /> Clear All Saved Projects
+              </button>
+            </div>
+          )}
         </SheetContent>
       </Sheet>
 
