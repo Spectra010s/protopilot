@@ -23,6 +23,7 @@ import {
   Layers3,
   LoaderCircle,
   Plus,
+  RotateCcw,
   Send,
   ShieldCheck,
   Sparkles,
@@ -34,6 +35,8 @@ import {
   X,
   FileSpreadsheet,
   Zap,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { BreadboardView } from "@/components/breadboard-view";
 import { SchematicView } from "@/components/schematic-view";
@@ -1184,18 +1187,132 @@ export default function WorkbenchPage() {
               {expandedArtifact.kind === "code" && <CopyCodeButton source={expandedArtifact.project.firmware.source} />}
               <button type="button" className="rounded-lg p-2 text-body hover:bg-subtle" onClick={() => setExpandedArtifact(null)} aria-label="Close expanded view"><X size={18} /></button>
             </div>
-            <div className="overflow-auto p-3">
-              {expandedArtifact.kind === "code" ? (
+            {expandedArtifact.kind === "code" ? (
+              <div className="overflow-auto p-4 max-h-[80vh]">
                 <pre className="overflow-auto rounded-lg bg-slate-950 p-5 text-xs leading-relaxed text-slate-100"><code>{expandedArtifact.project.firmware.source}</code></pre>
-              ) : expandedArtifact.kind === "schematic" ? (
-                <SchematicView project={expandedArtifact.project} />
-              ) : (
-                <BreadboardView project={expandedArtifact.project} />
-              )}
-            </div>
+              </div>
+            ) : (
+              <ZoomableCircuitView>
+                {expandedArtifact.kind === "schematic" ? (
+                  <SchematicView project={expandedArtifact.project} />
+                ) : (
+                  <BreadboardView project={expandedArtifact.project} />
+                )}
+              </ZoomableCircuitView>
+            )}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ZoomableCircuitView({ children }: { children: ReactNode }) {
+  const [scale, setScale] = useState(1);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+
+  function handleZoomIn() {
+    setScale((s) => Math.min(Number((s + 0.25).toFixed(2)), 3.5));
+  }
+
+  function handleZoomOut() {
+    setScale((s) => {
+      const next = Math.max(Number((s - 0.25).toFixed(2)), 0.5);
+      if (next <= 1) setPosition({ x: 0, y: 0 });
+      return next;
+    });
+  }
+
+  function handleReset() {
+    setScale(1);
+    setPosition({ x: 0, y: 0 });
+  }
+
+  function handleMouseDown(e: React.MouseEvent) {
+    if (scale <= 1) return;
+    setIsDragging(true);
+    dragStartRef.current = { x: e.clientX - position.x, y: e.clientY - position.y };
+  }
+
+  function handleMouseMove(e: React.MouseEvent) {
+    if (!isDragging) return;
+    setPosition({
+      x: e.clientX - dragStartRef.current.x,
+      y: e.clientY - dragStartRef.current.y,
+    });
+  }
+
+  function handleMouseUp() {
+    setIsDragging(false);
+  }
+
+  return (
+    <div className="relative flex min-h-[460px] max-h-[82vh] flex-1 flex-col overflow-hidden bg-canvas">
+      {/* Zoom controls floating bar */}
+      <div className="absolute bottom-4 right-4 z-20 flex items-center gap-1 rounded-xl border border-line bg-white/95 px-2 py-1.5 shadow-panel backdrop-blur-sm">
+        <button
+          type="button"
+          onClick={handleZoomOut}
+          disabled={scale <= 0.5}
+          className="grid size-7 place-items-center rounded-lg hover:bg-subtle text-body disabled:opacity-40 cursor-pointer"
+          title="Zoom out"
+          aria-label="Zoom out"
+        >
+          <ZoomOut size={15} />
+        </button>
+        <button
+          type="button"
+          onClick={handleReset}
+          className="px-2 text-[11px] font-semibold text-ink-strong hover:text-brand cursor-pointer"
+          title="Reset zoom"
+        >
+          {Math.round(scale * 100)}%
+        </button>
+        <button
+          type="button"
+          onClick={handleZoomIn}
+          disabled={scale >= 3.5}
+          className="grid size-7 place-items-center rounded-lg hover:bg-subtle text-body disabled:opacity-40 cursor-pointer"
+          title="Zoom in"
+          aria-label="Zoom in"
+        >
+          <ZoomIn size={15} />
+        </button>
+        {scale !== 1 && (
+          <button
+            type="button"
+            onClick={handleReset}
+            className="ml-1 grid size-7 place-items-center rounded-lg hover:bg-subtle text-quiet hover:text-ink cursor-pointer"
+            title="Reset to 100%"
+          >
+            <RotateCcw size={13} />
+          </button>
+        )}
+      </div>
+
+      {/* Circuit drawing canvas */}
+      <div
+        className={cn(
+          "flex flex-1 items-center justify-center p-6 select-none overflow-hidden",
+          scale > 1 ? (isDragging ? "cursor-grabbing" : "cursor-grab") : "cursor-default"
+        )}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
+        <div
+          style={{
+            transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+            transition: isDragging ? "none" : "transform 0.15s ease-out",
+          }}
+          className="w-full max-w-[960px] flex items-center justify-center origin-center"
+        >
+          {children}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1208,14 +1325,24 @@ function ChatArtifact({ artifact, onExpand }: { artifact: NonNullable<ProjectCon
         <strong className="truncate text-[11px] font-semibold text-ink-strong">{label}</strong>
         <div className="flex shrink-0 items-center gap-1">
           {artifact.kind === "code" && <CopyCodeButton source={artifact.project.firmware.source} />}
-          <button type="button" onClick={onExpand} className="rounded-md border border-line px-2 py-1 text-[10px] font-medium text-brand hover:bg-brand-soft">Expand</button>
+          <button type="button" onClick={onExpand} className="rounded-md border border-line px-2 py-1 text-[10px] font-medium text-brand hover:bg-brand-soft cursor-pointer">Expand</button>
         </div>
       </div>
       {artifact.kind === "code" ? (
         <pre className="max-h-48 overflow-auto bg-slate-950 p-3 text-[10px] leading-relaxed text-slate-100"><code>{artifact.project.firmware.source}</code></pre>
       ) : (
-        <button type="button" onClick={onExpand} className="block h-44 w-full overflow-hidden bg-canvas text-left" aria-label={`Expand ${label}`}>
-          {artifact.kind === "schematic" ? <SchematicView project={artifact.project} /> : <BreadboardView project={artifact.project} />}
+        <button
+          type="button"
+          onClick={onExpand}
+          className="group block w-full bg-canvas p-3 text-left cursor-pointer transition hover:bg-subtle"
+          aria-label={`Expand and zoom ${label}`}
+        >
+          <div className="flex h-auto max-h-56 w-full items-center justify-center overflow-hidden">
+            {artifact.kind === "schematic" ? <SchematicView project={artifact.project} /> : <BreadboardView project={artifact.project} />}
+          </div>
+          <div className="mt-2 flex items-center justify-center gap-1.5 text-[10px] font-medium text-quiet group-hover:text-brand">
+            <ZoomIn size={12} /> Click to expand &amp; zoom
+          </div>
         </button>
       )}
     </div>

@@ -14,8 +14,8 @@ function endpoint(project: Project, end: Connection["from"]) {
 
 export function BreadboardView({ project }: { project: Project }) {
   return (
-    <div className="w-full overflow-auto">
-      <svg className="block h-auto w-full min-w-[600px]" viewBox="0 0 900 520" role="img" aria-label="Breadboard layout generated from the project connections">
+    <div className="w-full h-full flex items-center justify-center">
+      <svg className="block h-auto w-full max-w-full" viewBox="0 0 900 520" role="img" aria-label="Breadboard layout generated from the project connections">
         <defs>
           <pattern id="holes" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="2.1" fill="#c8c3b8" /><circle cx="10" cy="10" r="1" fill="#f7f4ec" /></pattern>
           <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="4" stdDeviation="5" floodColor="#151a24" floodOpacity=".09" /></filter>

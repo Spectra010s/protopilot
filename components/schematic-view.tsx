@@ -43,8 +43,8 @@ function pinPoint(project: Project, end: Connection["from"]) {
 
 export function SchematicView({ project }: { project: Project }) {
   return (
-    <div className="w-full overflow-auto">
-      <svg className="block h-auto w-full min-w-[600px]" viewBox="0 0 900 520" role="img" aria-label="Schematic generated from the project connections">
+    <div className="w-full h-full flex items-center justify-center">
+      <svg className="block h-auto w-full max-w-full" viewBox="0 0 900 520" role="img" aria-label="Schematic generated from the project connections">
         <defs>
           <pattern id="schematic-grid" width="18" height="18" patternUnits="userSpaceOnUse">
             <circle cx="1" cy="1" r="1" fill="#e2e8e3" />
