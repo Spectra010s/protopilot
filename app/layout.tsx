@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "ProtoPilot — Hardware design that shows its work",
   description: "Turn a hardware idea into a structured circuit, wiring plan, firmware, and deterministic checks that show their work.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

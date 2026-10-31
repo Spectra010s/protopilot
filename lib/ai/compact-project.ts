@@ -20,14 +20,14 @@ export const CompactProjectSchema = z.object({
     toPin: z.string().min(1),
     net: z.string().min(1),
   })).min(1),
-  firmwareSource: z.string().min(1),
-  buildSteps: z.array(z.string()),
-  warnings: z.array(z.string()),
+  firmwareSource: z.string().optional().default(""),
+  buildSteps: z.array(z.string()).default([]),
+  warnings: z.array(z.string()).default([]),
 });
 
 export type CompactProject = z.infer<typeof CompactProjectSchema>;
 
-export function expandProject(plan: CompactProject, prompt: string, projectId?: string): Project {
+export function expandProject(plan: CompactProject, prompt: string, projectId?: string, existingProject?: Project | null): Project {
   const components = plan.components.map((component, index) => ({
     id: `part-${index + 1}`,
     partId: component.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `part-${index + 1}`,
@@ -118,7 +118,12 @@ export function expandProject(plan: CompactProject, prompt: string, projectId?: 
     components,
     connections,
     powerDomains: [],
-    firmware: { board: components.find((component) => component.category === "controller")?.name ?? "Select a controller", language: "Arduino C++", filename: `${slug}.ino`, source: plan.firmwareSource },
+    firmware: {
+      board: components.find((component) => component.category === "controller")?.name ?? existingProject?.firmware.board ?? "Select a controller",
+      language: "Arduino C++",
+      filename: `${slug}.ino`,
+      source: plan.firmwareSource || existingProject?.firmware.source || "",
+    },
     buildSteps: plan.buildSteps,
     assumptions: ["Exact part numbers and electrical ratings must be confirmed before assembly."],
     warnings: [...plan.warnings, ...(connections.length < plan.connections.length ? ["Some generated connections referred to missing pins and were omitted."] : [])],

@@ -57,6 +57,14 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   addProjectMessage,
   deleteProjectDraft,
   clearAllProjects,
@@ -91,13 +99,22 @@ export default function WorkbenchPage() {
   const [conversations, setConversations] = useState<Record<string, ProjectConversationMessage[]>>({});
   const [projectDrafts, setProjectDrafts] = useState<ProjectDraftSummary[]>([]);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; title: string } | null>(null);
 
   const diagramContainerRef = useRef<HTMLDivElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const generationControllerRef = useRef<AbortController | null>(null);
   const sendingRef = useRef(false);
 
-  const conversation = conversations[project?.id ?? sessionId ?? ""] ?? [];
+  const conversation = useMemo(() => {
+    const raw = conversations[project?.id ?? sessionId ?? ""] ?? [];
+    const seen = new Set<string>();
+    return raw.filter((m) => {
+      if (seen.has(m.id)) return false;
+      seen.add(m.id);
+      return true;
+    });
+  }, [conversations, project?.id, sessionId]);
   const checks = useMemo(() => (project ? validateElectrical(project) : []), [project]);
   const wiring = useMemo(() => (project ? deriveWiringTable(project) : []), [project]);
   const failCount = checks.filter((item) => item.status === "fail").length;
@@ -248,7 +265,11 @@ export default function WorkbenchPage() {
   async function recordMessage(role: ProjectConversationMessage["role"], content: string, projectId: string, artifact?: ProjectConversationMessage["artifact"]) {
     try {
       const message = await addProjectMessage(projectId, role, content, artifact);
-      setConversations((current) => ({ ...current, [projectId]: [...(current[projectId] ?? []), message] }));
+      setConversations((current) => {
+        const existing = current[projectId] ?? [];
+        if (existing.some((m) => m.id === message.id)) return current;
+        return { ...current, [projectId]: [...existing, message] };
+      });
       void listProjectDrafts().then((drafts) => setProjectDrafts(drafts)).catch(() => undefined);
     } catch (error) {
       const message: ProjectConversationMessage = {
@@ -259,7 +280,11 @@ export default function WorkbenchPage() {
         artifact,
         createdAt: Date.now(),
       };
-      setConversations((current) => ({ ...current, [projectId]: [...(current[projectId] ?? []), message] }));
+      setConversations((current) => {
+        const existing = current[projectId] ?? [];
+        if (existing.some((m) => m.id === message.id)) return current;
+        return { ...current, [projectId]: [...existing, message] };
+      });
       setNotice(error instanceof Error ? `Session only: ${error.message}` : "Message not saved");
     }
   }
@@ -417,7 +442,32 @@ export default function WorkbenchPage() {
           </Link>
         </div>
 
-        {/* Central View Switcher Tabs: Chat & Workbench */}
+        <nav className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setLibraryOpen(true)}
+            className="flex items-center gap-1.5 text-xs font-medium text-body hover:text-brand bg-transparent border-0 cursor-pointer p-0"
+          >
+            <Database size={14} className="text-brand" />
+            <span className="max-[600px]:hidden">My Projects</span>
+            {projectDrafts.length > 0 && (
+              <span className="rounded-full bg-chip px-1.5 py-0.5 text-[9px] text-quiet font-bold">{projectDrafts.length}</span>
+            )}
+          </button>
+          {project && (
+            <button
+              type="button"
+              onClick={startNewProject}
+              className="flex items-center gap-1 text-xs text-quiet hover:text-ink bg-transparent border-0 cursor-pointer p-0 ml-2"
+            >
+              <Plus size={14} /> <span className="max-[600px]:hidden">New</span>
+            </button>
+          )}
+        </nav>
+      </header>
+
+      {/* ── Tab Bar: Chat / Workbench ── */}
+      <div className="flex items-center justify-center border-b border-line bg-white px-7 py-2 max-[760px]:px-3.5">
         <div className="flex items-center rounded-xl bg-chip/70 p-1 border border-line-soft">
           <button
             type="button"
@@ -449,30 +499,7 @@ export default function WorkbenchPage() {
             )}
           </button>
         </div>
-
-        <nav className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setLibraryOpen(true)}
-            className="flex items-center gap-1.5 text-xs font-medium text-body hover:text-brand bg-transparent border-0 cursor-pointer p-0"
-          >
-            <Database size={14} className="text-brand" />
-            <span className="max-[600px]:hidden">My Projects</span>
-            {projectDrafts.length > 0 && (
-              <span className="rounded-full bg-chip px-1.5 py-0.5 text-[9px] text-quiet font-bold">{projectDrafts.length}</span>
-            )}
-          </button>
-          {project && (
-            <button
-              type="button"
-              onClick={startNewProject}
-              className="flex items-center gap-1 text-xs text-quiet hover:text-ink bg-transparent border-0 cursor-pointer p-0 ml-2"
-            >
-              <Plus size={14} /> <span className="max-[600px]:hidden">New</span>
-            </button>
-          )}
-        </nav>
-      </header>
+      </div>
 
       {/* ── Main View: Chat or Workbench ── */}
       {activeTab === "chat" ? (
@@ -569,7 +596,7 @@ export default function WorkbenchPage() {
           </main>
         ) : (
           /* Full Page Chat UI */
-          <main className="mx-auto flex h-[calc(100vh-62px)] w-full max-w-[880px] flex-col px-4 pb-4 pt-3" aria-live="polite">
+          <main className="mx-auto flex h-[calc(100vh-108px)] w-full max-w-[880px] flex-col px-4 pb-4 pt-3" aria-live="polite">
             {/* Chat Header Status */}
             <div className="flex items-center justify-between border-b border-line pb-3">
               <div className="flex items-center gap-2.5">
@@ -584,19 +611,6 @@ export default function WorkbenchPage() {
                   </p>
                 </div>
               </div>
-              {project && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTab("workbench");
-                    setWorkbenchSubView("overview");
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-1 text-xs font-medium text-brand hover:bg-brand-soft cursor-pointer transition"
-                >
-                  <LayoutGrid size={13} />
-                  <span>View in Workbench</span>
-                </button>
-              )}
             </div>
 
             {/* Chat Messages Body */}
@@ -726,7 +740,7 @@ export default function WorkbenchPage() {
       ) : (
         /* ── Workbench View ── */
         !project ? (
-          <main className="mx-auto flex h-[calc(100vh-62px)] w-full max-w-[800px] flex-col items-center justify-center px-6 py-14 text-center">
+          <main className="mx-auto flex h-[calc(100vh-108px)] w-full max-w-[800px] flex-col items-center justify-center px-6 py-14 text-center">
             <div className="grid size-16 place-items-center rounded-2xl bg-brand-soft text-brand mb-4">
               <LayoutGrid size={32} />
             </div>
@@ -743,129 +757,241 @@ export default function WorkbenchPage() {
             </button>
           </main>
         ) : (
-          <main className="flex min-h-[calc(100vh-62px)] flex-col bg-canvas">
-            {/* Top Workbench Bar */}
-            <div className="sticky top-0 z-10 border-b border-line bg-white/95 px-6 py-3 backdrop-blur-sm">
-              <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 flex-wrap">
-                {/* Left: Project title & metadata */}
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand font-bold text-xs">
-                    <Cpu size={16} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-bold text-ink-strong truncate max-w-[220px] sm:max-w-[340px]">
-                        {project.title}
-                      </h2>
-                      <span className="rounded-md bg-chip px-2 py-0.5 text-[9px] font-semibold text-quiet shrink-0">
-                        rev {project.revision + 1}
-                      </span>
-                      <span className="hidden sm:inline-block rounded-md bg-brand-soft px-2 py-0.5 text-[9px] font-semibold text-brand-ink shrink-0">
-                        {project.constraints.controller ?? "MCU"}
-                      </span>
+          <main className="flex min-h-[calc(100vh-108px)] flex-col bg-canvas">
+            {workbenchSubView === "overview" && (
+              /* ── Workbench Artifact Gallery ── */
+              <div className="flex-1 px-6 py-8 sm:px-10">
+                <div className="mx-auto max-w-[1200px]">
+                  {/* Project Header */}
+                  <div className="mb-8 flex items-start justify-between gap-4 flex-wrap">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand font-bold text-sm">
+                        <Cpu size={20} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2.5">
+                          <h2 className="text-lg font-bold text-ink-strong truncate max-w-[300px] sm:max-w-[460px]">
+                            {project.title}
+                          </h2>
+                          <span className="rounded-md bg-chip px-2 py-0.5 text-[10px] font-semibold text-quiet shrink-0">
+                            rev {project.revision + 1}
+                          </span>
+                          <span className="hidden sm:inline-block rounded-md bg-brand-soft px-2 py-0.5 text-[10px] font-semibold text-brand-ink shrink-0">
+                            {project.constraints.controller ?? "MCU"}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-xs text-body max-w-[500px] truncate">{project.summary}</p>
+                      </div>
                     </div>
-                    <p className="text-[10px] text-faint truncate max-w-[380px]">{project.summary}</p>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("chat")}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-body hover:bg-subtle cursor-pointer shadow-xs shrink-0"
+                    >
+                      <Bot size={13} /> Back to Chat
+                    </button>
                   </div>
-                </div>
 
-                {/* Middle: Sub-view Switcher Pills */}
-                <div className="flex items-center rounded-lg bg-chip/70 p-1 border border-line-soft">
-                  <button
-                    type="button"
-                    onClick={() => setWorkbenchSubView("overview")}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition cursor-pointer",
-                      workbenchSubView === "overview" ? "bg-white text-ink-strong shadow-sm font-semibold" : "text-quiet hover:text-ink"
-                    )}
-                  >
-                    <Database size={13} />
-                    <span>Schema ERD</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWorkbenchSubView("circuit")}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition cursor-pointer",
-                      workbenchSubView === "circuit" ? "bg-white text-ink-strong shadow-sm font-semibold" : "text-quiet hover:text-ink"
-                    )}
-                  >
-                    <CircuitBoard size={13} />
-                    <span>Circuit Diagram</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWorkbenchSubView("code")}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition cursor-pointer",
-                      workbenchSubView === "code" ? "bg-white text-ink-strong shadow-sm font-semibold" : "text-quiet hover:text-ink"
-                    )}
-                  >
-                    <FileCode2 size={13} />
-                    <span>Firmware</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWorkbenchSubView("wiring")}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition cursor-pointer",
-                      workbenchSubView === "wiring" ? "bg-white text-ink-strong shadow-sm font-semibold" : "text-quiet hover:text-ink"
-                    )}
-                  >
-                    <Cable size={13} />
-                    <span>Wiring &amp; BOM</span>
-                  </button>
-                </div>
-
-                {/* Right: Quick actions */}
-                <div className="flex items-center gap-2">
-                  {workbenchSubView === "circuit" && (
-                    <button
-                      type="button"
-                      onClick={downloadDiagram}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-body hover:bg-subtle cursor-pointer"
-                      title="Download SVG"
-                    >
-                      <Download size={13} /> SVG
-                    </button>
-                  )}
-                  {workbenchSubView === "code" && (
-                    <>
+                  {/* Generated Artifacts Grid */}
+                  <div className="mb-4">
+                    <h3 className="text-xs font-semibold text-quiet uppercase tracking-wider mb-4">Generated Artifacts</h3>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {/* Circuit Diagram Card — always available when components + connections exist */}
+                    {project.components.length > 0 && project.connections.length > 0 && (
                       <button
                         type="button"
-                        onClick={copyFirmware}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-body hover:bg-subtle cursor-pointer"
+                        onClick={() => setWorkbenchSubView("circuit")}
+                        className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-panel text-left cursor-pointer transition hover:border-brand hover:shadow-md"
                       >
-                        {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "Copied" : "Copy"}
+                        <div className="flex items-center gap-3 border-b border-line bg-subtle/40 px-4 py-3">
+                          <span className="grid size-8 place-items-center rounded-lg bg-brand-soft text-brand">
+                            <CircuitBoard size={16} />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <strong className="text-xs font-bold text-ink-strong block">Circuit Diagram</strong>
+                            <span className="text-[10px] text-quiet">Breadboard & Schematic Views</span>
+                          </div>
+                          <ArrowRight size={14} className="text-faint group-hover:text-brand transition shrink-0" />
+                        </div>
+                        <div className="flex-1 p-4">
+                          <div className="flex flex-wrap gap-1.5">
+                            {project.components.slice(0, 5).map((c) => (
+                              <span key={c.id} className="rounded-md bg-chip px-2 py-0.5 text-[10px] font-mono text-quiet">{c.reference}</span>
+                            ))}
+                            {project.components.length > 5 && (
+                              <span className="rounded-md bg-chip px-2 py-0.5 text-[10px] text-faint">+{project.components.length - 5} more</span>
+                            )}
+                          </div>
+                          <p className="mt-2 text-[11px] text-body leading-relaxed line-clamp-2">
+                            {project.components.length} components · {project.connections.length} connections
+                          </p>
+                        </div>
                       </button>
+                    )}
+
+                    {/* Firmware Code Card — available when source is non-empty */}
+                    {project.firmware.source.trim().length > 0 && (
                       <button
                         type="button"
-                        onClick={downloadFirmware}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-body hover:bg-subtle cursor-pointer"
+                        onClick={() => setWorkbenchSubView("code")}
+                        className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-panel text-left cursor-pointer transition hover:border-brand hover:shadow-md"
                       >
-                        <Download size={13} /> .ino
+                        <div className="flex items-center gap-3 border-b border-line bg-subtle/40 px-4 py-3">
+                          <span className="grid size-8 place-items-center rounded-lg bg-emerald-50 text-emerald-600">
+                            <FileCode2 size={16} />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <strong className="text-xs font-bold text-ink-strong block">{project.firmware.filename}</strong>
+                            <span className="text-[10px] text-quiet">{project.firmware.language} · {project.firmware.board || "Arduino"}</span>
+                          </div>
+                          <ArrowRight size={14} className="text-faint group-hover:text-brand transition shrink-0" />
+                        </div>
+                        <div className="flex-1 p-4">
+                          <div className="rounded-lg bg-slate-950 p-3 max-h-24 overflow-hidden">
+                            <pre className="font-mono text-[10px] leading-relaxed text-slate-300 whitespace-pre-wrap">
+                              {project.firmware.source.slice(0, 200)}{project.firmware.source.length > 200 ? "…" : ""}
+                            </pre>
+                          </div>
+                        </div>
                       </button>
-                    </>
-                  )}
-                  {workbenchSubView === "wiring" && (
-                    <button
-                      type="button"
-                      onClick={exportWiringCSV}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-body hover:bg-subtle cursor-pointer"
-                    >
-                      <FileSpreadsheet size={13} /> CSV
-                    </button>
-                  )}
+                    )}
+
+                    {/* Wiring & BOM Card — available when components exist */}
+                    {project.components.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setWorkbenchSubView("wiring")}
+                        className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-panel text-left cursor-pointer transition hover:border-brand hover:shadow-md"
+                      >
+                        <div className="flex items-center gap-3 border-b border-line bg-subtle/40 px-4 py-3">
+                          <span className="grid size-8 place-items-center rounded-lg bg-amber-50 text-amber-600">
+                            <Cable size={16} />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <strong className="text-xs font-bold text-ink-strong block">Wiring & BOM</strong>
+                            <span className="text-[10px] text-quiet">Pin Netlist & Components</span>
+                          </div>
+                          <ArrowRight size={14} className="text-faint group-hover:text-brand transition shrink-0" />
+                        </div>
+                        <div className="flex-1 p-4">
+                          <div className="flex items-center gap-4 text-[11px] text-body">
+                            <span className="flex items-center gap-1.5">
+                              <Layers3 size={13} className="text-quiet" />
+                              {project.components.length} components
+                            </span>
+                            <span className="flex items-center gap-1.5">
+                              <Cable size={13} className="text-quiet" />
+                              {wiring.length} wires
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                    )}
+
+                    {/* Safety Checks Card — available when checks have results */}
+                    {checks.length > 0 && (
+                      <div className="flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-panel text-left">
+                        <div className="flex items-center gap-3 border-b border-line bg-subtle/40 px-4 py-3">
+                          <span className={cn(
+                            "grid size-8 place-items-center rounded-lg",
+                            failCount > 0 ? "bg-red-50 text-red-600" : warningCount > 0 ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"
+                          )}>
+                            <ShieldCheck size={16} />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <strong className="text-xs font-bold text-ink-strong block">Safety Checks</strong>
+                            <span className="text-[10px] text-quiet">Electrical validation results</span>
+                          </div>
+                        </div>
+                        <div className="flex-1 p-4 space-y-2">
+                          <div className="flex items-center gap-3 text-[11px]">
+                            {failCount > 0 && (
+                              <span className="flex items-center gap-1 text-red-600 font-semibold">
+                                <X size={12} /> {failCount} fail{failCount !== 1 ? "s" : ""}
+                              </span>
+                            )}
+                            {warningCount > 0 && (
+                              <span className="flex items-center gap-1 text-amber-600 font-semibold">
+                                <CircleHelp size={12} /> {warningCount} warning{warningCount !== 1 ? "s" : ""}
+                              </span>
+                            )}
+                            {failCount === 0 && warningCount === 0 && (
+                              <span className="flex items-center gap-1 text-emerald-600 font-semibold">
+                                <Check size={12} /> All {checks.length} checks passed
+                              </span>
+                            )}
+                          </div>
+                          {checks.slice(0, 3).map((check, i) => (
+                            <div key={i} className="flex items-start gap-2 text-[10px] text-body">
+                              <span className={cn(
+                                "mt-0.5 size-1.5 rounded-full shrink-0",
+                                check.status === "fail" ? "bg-red-500" : check.status === "warning" || check.status === "unverified" ? "bg-amber-400" : "bg-emerald-500"
+                              )} />
+                              <span className="line-clamp-1">{check.title}: {check.detail}</span>
+                            </div>
+                          ))}
+                          {checks.length > 3 && (
+                            <p className="text-[10px] text-faint">+{checks.length - 3} more checks</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Build Steps Card — available when buildSteps exist */}
+                    {project.buildSteps.length > 0 && (
+                      <div className="flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-panel text-left">
+                        <div className="flex items-center gap-3 border-b border-line bg-subtle/40 px-4 py-3">
+                          <span className="grid size-8 place-items-center rounded-lg bg-violet-50 text-violet-600">
+                            <Sprout size={16} />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <strong className="text-xs font-bold text-ink-strong block">Build Steps</strong>
+                            <span className="text-[10px] text-quiet">{project.buildSteps.length} step{project.buildSteps.length !== 1 ? "s" : ""}</span>
+                          </div>
+                        </div>
+                        <div className="flex-1 p-4 space-y-1.5">
+                          {project.buildSteps.slice(0, 4).map((step, i) => (
+                            <div key={i} className="flex items-start gap-2 text-[11px] text-body">
+                              <span className="grid size-4 shrink-0 place-items-center rounded-full bg-chip text-[9px] font-bold text-quiet mt-0.5">{i + 1}</span>
+                              <span className="line-clamp-1">{step}</span>
+                            </div>
+                          ))}
+                          {project.buildSteps.length > 4 && (
+                            <p className="text-[10px] text-faint pl-6">+{project.buildSteps.length - 4} more steps</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Warnings Card — available when warnings exist */}
+                    {project.warnings.length > 0 && (
+                      <div className="flex flex-col overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-panel text-left">
+                        <div className="flex items-center gap-3 border-b border-amber-100 bg-amber-50/60 px-4 py-3">
+                          <span className="grid size-8 place-items-center rounded-lg bg-amber-100 text-amber-600">
+                            <CircleHelp size={16} />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <strong className="text-xs font-bold text-ink-strong block">Warnings & Notes</strong>
+                            <span className="text-[10px] text-quiet">{project.warnings.length} item{project.warnings.length !== 1 ? "s" : ""}</span>
+                          </div>
+                        </div>
+                        <div className="flex-1 p-4 space-y-1.5">
+                          {project.warnings.slice(0, 3).map((w, i) => (
+                            <p key={i} className="text-[11px] text-amber-800 leading-relaxed line-clamp-2">⚠ {w}</p>
+                          ))}
+                          {project.warnings.length > 3 && (
+                            <p className="text-[10px] text-faint">+{project.warnings.length - 3} more</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Workbench Body */}
-            <div className="flex-1">
-              {workbenchSubView === "overview" && (
-                <DatabaseSchemaView project={project} onOpenView={(v) => setWorkbenchSubView(v)} />
-              )}
-
-              {workbenchSubView === "circuit" && (
+            {workbenchSubView === "circuit" && (
                 /* ── Fullscreen Circuit Canvas View ── */
                 <div className="flex h-[calc(100vh-125px)] flex-col bg-canvas">
                   <div className="flex items-center justify-between border-b border-line bg-white px-6 py-2.5">
@@ -874,7 +1000,7 @@ export default function WorkbenchPage() {
                       onClick={() => setWorkbenchSubView("overview")}
                       className="inline-flex items-center gap-1.5 text-xs font-medium text-quiet hover:text-brand cursor-pointer"
                     >
-                      <ArrowLeft size={14} /> Back to Schema View
+                      <ArrowLeft size={14} /> Back to Overview
                     </button>
 
                     <Tabs value={view} onValueChange={(val) => setView(val as View)}>
@@ -915,7 +1041,7 @@ export default function WorkbenchPage() {
                       onClick={() => setWorkbenchSubView("overview")}
                       className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-white cursor-pointer"
                     >
-                      <ArrowLeft size={14} /> Back to Schema View
+                      <ArrowLeft size={14} /> Back to Overview
                     </button>
 
                     <div className="flex items-center gap-2 text-xs font-mono">
@@ -961,7 +1087,7 @@ export default function WorkbenchPage() {
                         onClick={() => setWorkbenchSubView("overview")}
                         className="inline-flex items-center gap-1.5 text-xs font-medium text-quiet hover:text-brand cursor-pointer"
                       >
-                        <ArrowLeft size={14} /> Back to Schema View
+                        <ArrowLeft size={14} /> Back to Overview
                       </button>
                       <button
                         type="button"
@@ -1047,7 +1173,6 @@ export default function WorkbenchPage() {
                   </div>
                 </div>
               )}
-            </div>
           </main>
         )
       )}
@@ -1092,7 +1217,7 @@ export default function WorkbenchPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => void handleDeleteProject(draft.id)}
+                    onClick={() => setDeleteConfirm({ id: draft.id, title: draft.title })}
                     className="grid size-7 place-items-center rounded-lg text-quiet hover:text-danger hover:bg-danger-soft/40 cursor-pointer transition shrink-0"
                     title="Delete project"
                   >
@@ -1121,6 +1246,40 @@ export default function WorkbenchPage() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* ── Delete Confirmation Dialog ── */}
+      <Dialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Delete Project</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <strong className="text-ink-strong">{deleteConfirm?.title}</strong>? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setDeleteConfirm(null)}
+              className="inline-flex h-9 items-center justify-center rounded-lg border border-line bg-white px-4 text-xs font-medium text-body hover:bg-subtle cursor-pointer transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (deleteConfirm) {
+                  void handleDeleteProject(deleteConfirm.id);
+                  setDeleteConfirm(null);
+                }
+              }}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-danger px-4 text-xs font-semibold text-white hover:bg-danger/90 cursor-pointer transition"
+            >
+              <Trash2 size={13} />
+              Delete
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Expanded Artifact Modal ── */}
       {expandedArtifact && (

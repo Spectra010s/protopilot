@@ -34,12 +34,21 @@ export async function POST(request: Request) {
         const result = streamText({
           model,
           instructions: `You are ProtoPilot, an AI electronics and hardware design assistant. Talk naturally, concisely, and directly with the user.
-Use tools to generate and show hardware designs:
-- When the user asks to design, build, or modify a hardware circuit: call saveDesign. It generates components, schematic connections, build steps, and Arduino firmware.
-- When the user asks for code, firmware, or to write/modify the Arduino program: call showCode (if a design is open) or generateCode.
-- When the user asks to see the circuit diagram, picture, or breadboard: call showCircuitDiagram.
-- When the user asks to see the electrical schematic: call showSchematic.
-- When the user asks general questions or discusses electronics: answer directly in markdown without calling tools.
+
+Use tools independently based on what the user wants:
+- When the user asks to design, build, or modify hardware components/circuit: call saveDesign. You do NOT have to write firmware code unless the user asked for it.
+- When the user asks for code, firmware, or to write/modify the Arduino program: call generateCode.
+- When the user asks to view or see the circuit diagram/breadboard: call showCircuitDiagram.
+- When the user asks to view or see the electrical schematic: call showSchematic.
+- When the user asks to view or see the firmware code: call showCode.
+- When the user asks general questions or discusses electronics: answer directly in markdown without calling any tool.
+
+IMPORTANT RULES ON TOOLS & ARTIFACTS:
+- Each tool is separate. You choose which tool to call based on the user's intent. Do not force multiple tools at once.
+- If the user asks for a circuit, generate only the circuit.
+- If the user asks for code, generate the firmware code.
+- NEVER ask the user if they want to see the circuit diagram or code after calling saveDesign or showCircuitDiagram! The visual circuit diagram is ALREADY rendered directly in the chat for the user to see. Instead, explain your wiring and component choices, and suggest next steps or test procedures.
+
 CRITICAL DESIGN RULES:
 - If the user's request is for a new, different device or circuit idea, create a completely fresh design from scratch with parts, microcontroller, and pinouts tailored specifically to their prompt. Do NOT carry over components from an unrelated previous design.
 - Never drive an inductive load (motor, solenoid, relay, pump) directly from a GPIO pin; always require a MOSFET/transistor driver and flyback diode.
@@ -47,25 +56,34 @@ CRITICAL DESIGN RULES:
           messages,
           tools: {
             saveDesign: tool({
-              description: "Create or update the current hardware design, including components, schematic connections, build steps, and Arduino firmware. Use only for a request to build or modify the design.",
+              description: "Create or update the hardware circuit design, including components, pins, schematic connections, and build steps. Include firmwareSource only if the user specifically requested code.",
               inputSchema: CompactProjectSchema,
               execute: async (plan) => {
-                const next = expandProject(plan, project?.prompt ?? message, projectId);
+                const current = savedProject ?? project;
+                const next = expandProject(plan, project?.prompt ?? message, projectId, current);
                 savedProject = { ...next, revision: project ? project.revision + 1 : 0 };
                 send({ type: "project", project: savedProject });
 
+                const hasCode = !!plan.firmwareSource?.trim();
                 const askedForCode = /\b(code|firmware|sketch|c\+\+|program|arduino|software)\b/i.test(message);
                 const askedForCircuit = /\b(circuit|diagram|breadboard|schematic|wire|wiring|visual|picture|image|look like)\b/i.test(message);
 
                 if (askedForCode && !askedForCircuit) {
-                  send({ type: "artifact", kind: "code", project: savedProject });
-                } else if (askedForCircuit && !askedForCode) {
+                  if (hasCode) send({ type: "artifact", kind: "code", project: savedProject });
+                } else if (askedForCode && hasCode) {
                   send({ type: "artifact", kind: "breadboard", project: savedProject });
+                  send({ type: "artifact", kind: "code", project: savedProject });
                 } else {
                   send({ type: "artifact", kind: "breadboard", project: savedProject });
-                  send({ type: "artifact", kind: "code", project: savedProject });
                 }
-                return { title: savedProject.title, revision: savedProject.revision, components: savedProject.components.length };
+                return {
+                  success: true,
+                  title: savedProject.title,
+                  revision: savedProject.revision,
+                  componentsCount: savedProject.components.length,
+                  connectionsCount: savedProject.connections.length,
+                  notice: "Circuit diagram has already been rendered in the user's chat. Do not ask if they want to see it.",
+                };
               },
             }),
             generateCode: tool({
