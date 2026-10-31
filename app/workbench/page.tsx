@@ -27,6 +27,7 @@ import {
   ShieldCheck,
   Sparkles,
   Sprout,
+  Square,
   Waves,
   Cable,
   Cpu,
@@ -406,18 +407,18 @@ export default function WorkbenchPage() {
 
       {/* ── Main Workspace ── */}
       {!project ? (
-        /* Empty / New Project Onboarding Canvas */
-        <main className="mx-auto flex w-full max-w-[960px] flex-col items-center px-6 py-14 text-center">
-          <div className="grid size-14 place-items-center rounded-2xl bg-brand-soft text-brand mb-4">
-            <CircuitBoard size={30} />
-          </div>
-          <h1 className="text-[26px] font-bold text-ink-strong tracking-tight">Create a New Hardware Design</h1>
-          <p className="mt-2 max-w-[500px] text-[13px] text-body leading-relaxed">
-            Enter what you want to build. ProtoPilot will choose microcontroller pins, build stages, generate wiring netlists, Arduino code, and verify safety checks.
-          </p>
+        !activeGeneration && !busy && conversation.length === 0 ? (
+          /* Empty / New Project Onboarding Canvas */
+          <main className="mx-auto flex w-full max-w-[960px] flex-col items-center px-6 py-14 text-center">
+            <div className="grid size-14 place-items-center rounded-2xl bg-brand-soft text-brand mb-4">
+              <CircuitBoard size={30} />
+            </div>
+            <h1 className="text-[26px] font-bold text-ink-strong tracking-tight">Create a New Hardware Design</h1>
+            <p className="mt-2 max-w-[500px] text-[13px] text-body leading-relaxed">
+              Enter what you want to build. ProtoPilot will choose microcontroller pins, build stages, generate wiring netlists, Arduino code, and verify safety checks.
+            </p>
 
-          {!activeGeneration && !busy && conversation.length === 0 ? (
-            /* Initial Prompt Form before chat starts */
+            {/* Initial Prompt Form before chat starts */}
             <div className="mt-8 w-full max-w-[620px] rounded-2xl border border-line-strong bg-white p-5 shadow-panel text-left">
               <label className="text-xs font-semibold text-ink-strong flex items-center gap-2 mb-2" htmlFor="initial-prompt">
                 <Sparkles size={15} className="text-brand" />
@@ -432,157 +433,34 @@ export default function WorkbenchPage() {
                 className="w-full resize-none rounded-xl border border-line-strong bg-inset p-3 text-[12px] text-ink outline-none focus:border-brand focus:shadow-focus"
               />
               <div className="mt-3 flex items-center justify-between gap-3">
-                <span className="text-[10px] text-quiet">Gemma 4 checks electrical compatibility</span>
-                <button
-                  type="button"
-                  onClick={() => generateIdea()}
-                  disabled={busy || !prompt.trim()}
-                  aria-label="Send to ProtoPilot"
-                  className="inline-flex min-h-[36px] items-center justify-center gap-2 rounded-xl bg-brand px-4 text-[12px] font-semibold text-white shadow-button hover:bg-brand-strong disabled:opacity-50 cursor-pointer"
-                >
-                  {busy && <LoaderCircle className="animate-spin" size={16} />}
-                  <span className="max-[600px]:hidden">{busy ? "Responding…" : "Send to ProtoPilot"}</span>
-                  <span className="hidden max-[600px]:inline">Send</span>
-                </button>
-              </div>
-            </div>
-          ) : (
-            /* Dedicated Normal Chat UI once chat has started */
-            <div className="mt-8 w-full max-w-[640px] rounded-2xl border border-line-strong bg-white shadow-panel overflow-hidden text-left flex flex-col" aria-live="polite">
-              {/* Chat Header */}
-              <div className="flex items-center justify-between border-b border-line px-5 py-3.5 bg-subtle/50">
-                <div className="flex items-center gap-2.5">
-                  <div className="grid size-7 place-items-center rounded-lg bg-brand-soft text-brand">
-                    <Bot size={16} />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-semibold text-ink-strong">Hardware Design Assistant</h3>
-                    <p className="text-[10px] text-faint flex items-center gap-1.5">
-                      <span className={cn("inline-block size-1.5 rounded-full", busy ? "bg-amber-500 animate-pulse" : "bg-pass")} />
-                      {busy ? `Gemma 4 is responding… (${generationSeconds}s)` : "Gemma 4 · Online"}
-                    </p>
-                  </div>
-                </div>
-                {!busy && (
+                <span className="text-[10px] text-quiet">Checks electrical compatibility</span>
+                {busy ? (
                   <button
                     type="button"
-                    onClick={resetChat}
-                    className="text-[11px] font-medium text-quiet hover:text-ink cursor-pointer"
+                    onClick={() => generationControllerRef.current?.abort("cancelled")}
+                    className="inline-flex min-h-[36px] items-center justify-center gap-1.5 rounded-xl bg-danger px-4 text-[12px] font-semibold text-white shadow-button hover:bg-danger/90 cursor-pointer"
+                    title="Stop"
                   >
-                    Start Over
+                    <Square size={12} className="fill-current" />
+                    <span className="hidden sm:inline">Stop</span>
                   </button>
-                )}
-              </div>
-
-              {/* Chat Messages Body */}
-              <div ref={chatScrollRef} className="p-5 space-y-4 max-h-[440px] overflow-y-auto">
-                {conversation.length > 0 ? (
-                  conversation.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={cn("flex gap-2.5", msg.role === "user" ? "justify-end" : "justify-start")}
-                    >
-                      {msg.role !== "user" && (
-                        <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand mt-0.5">
-                          <Bot size={15} />
-                        </div>
-                      )}
-                      <div
-                        className={cn(
-                          "rounded-2xl px-4 py-2.5 text-xs leading-relaxed max-w-[85%]",
-                          msg.role === "user"
-                            ? "rounded-tr-sm bg-brand text-white shadow-sm"
-                            : "rounded-tl-sm border border-line-soft bg-subtle text-ink-strong shadow-xs"
-                        )}
-                      >
-                        {msg.content && (msg.role === "assistant" ? <AssistantMarkdown>{msg.content}</AssistantMarkdown> : <p className="whitespace-pre-line">{msg.content}</p>)}
-                        {msg.artifact && <ChatArtifact artifact={msg.artifact} onExpand={() => setExpandedArtifact(msg.artifact ?? null)} />}
-                        <span className={cn("block mt-1 text-[9px]", msg.role === "user" ? "text-white/70 text-right" : "text-faint")}>
-                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                ) : activeGeneration ? (
-                  <div className="flex justify-end gap-2.5">
-                    <div className="rounded-2xl rounded-tr-sm bg-brand px-4 py-2.5 text-xs text-white max-w-[85%] shadow-sm leading-relaxed">
-                      <p className="whitespace-pre-line">{activeGeneration}</p>
-                      <span className="block mt-1 text-[9px] text-white/70 text-right">Just now</span>
-                    </div>
-                  </div>
-                ) : null}
-
-                {/* Assistant Working Bubble */}
-                {busy && (
-                  <div className="flex items-start gap-2.5">
-                    <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand mt-0.5">
-                      <Bot size={15} />
-                    </div>
-                    <div className="rounded-2xl rounded-tl-sm border border-line-soft bg-subtle px-4 py-3 text-xs text-ink-strong max-w-[85%] shadow-xs space-y-2">
-                      <div className="flex items-center gap-2 font-medium text-brand">
-                        <LoaderCircle className="animate-spin" size={14} />
-                        <span>Gemma 4 is responding… ({generationSeconds}s)</span>
-                      </div>
-                      {notice && <p className="text-[11px] text-body">{notice}</p>}
-                      <button
-                        type="button"
-                        onClick={() => generationControllerRef.current?.abort("cancelled")}
-                        className="text-[11px] text-faint hover:text-red-500 underline cursor-pointer"
-                      >
-                        Cancel request
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {chatReply && !conversation.some((m) => m.content === chatReply) && (
-                  <div className="flex items-start gap-2.5">
-                    <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand mt-0.5">
-                      <Bot size={15} />
-                    </div>
-                    <div className="rounded-2xl rounded-tl-sm border border-line-soft bg-subtle px-4 py-3 text-xs text-ink-strong max-w-[85%] shadow-xs">
-                      <AssistantMarkdown>{chatReply}</AssistantMarkdown>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Chat Input Footer */}
-              <div className="border-t border-line p-3 bg-white">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (prompt.trim()) void generateIdea(prompt);
-                  }}
-                  className="flex gap-2"
-                >
-                  <label className="sr-only" htmlFor="chat-reply-input">
-                    Your message
-                  </label>
-                  <textarea
-                    id="chat-reply-input"
-                    rows={2}
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    disabled={busy}
-                    placeholder="Ask ProtoPilot anything about your design…"
-                    className="w-full resize-none rounded-xl border border-line-strong bg-inset p-3 text-xs text-ink outline-none focus:border-brand focus:shadow-focus"
-                  />
+                ) : (
                   <button
-                    type="submit"
-                    disabled={busy || !prompt.trim()}
-                    className="self-end inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand px-4 text-xs font-semibold text-white shadow-button hover:bg-brand-strong disabled:opacity-50 cursor-pointer shrink-0"
+                    type="button"
+                    onClick={() => generateIdea()}
+                    disabled={!prompt.trim()}
+                    aria-label="Send to ProtoPilot"
+                    className="inline-flex min-h-[36px] items-center justify-center gap-2 rounded-xl bg-brand px-4 text-[12px] font-semibold text-white shadow-button hover:bg-brand-strong disabled:opacity-50 cursor-pointer"
                   >
-                    {busy ? <LoaderCircle className="animate-spin" size={14} /> : <Send size={13} />}
-                    <span>Send</span>
+                    <Sparkles size={15} />
+                    <span className="max-[600px]:hidden">Send to ProtoPilot</span>
+                    <span className="hidden max-[600px]:inline">Send</span>
                   </button>
-                </form>
+                )}
               </div>
             </div>
-          )}
 
-          {/* 4 Separate Standalone Starter Cards Underneath (ONLY shown before chat starts) */}
-          {!activeGeneration && !busy && conversation.length === 0 && (
+            {/* 4 Separate Standalone Starter Cards Underneath */}
             <div className="mt-8 w-full max-w-[620px]">
               <p className="text-[11px] font-semibold tracking-wider text-faint uppercase mb-3 text-left">
                 Or pick an idea to start:
@@ -631,8 +509,142 @@ export default function WorkbenchPage() {
                 ))}
               </div>
             </div>
-          )}
-        </main>
+          </main>
+        ) : (
+          /* Full Page Chat UI once conversation has started */
+          <main className="mx-auto flex h-[calc(100vh-62px)] w-full max-w-[880px] flex-col px-4 pb-4 pt-3" aria-live="polite">
+            {/* Chat Header Status */}
+            <div className="flex items-center justify-between border-b border-line pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="grid size-8 place-items-center rounded-xl bg-brand-soft text-brand">
+                  <Bot size={18} />
+                </div>
+                <div>
+                  <h3 className="text-xs font-semibold text-ink-strong">Hardware Design Assistant</h3>
+                  <p className="text-[10px] text-faint flex items-center gap-1.5">
+                    <span className={cn("inline-block size-1.5 rounded-full", busy ? "bg-amber-500 animate-pulse" : "bg-pass")} />
+                    {busy ? "ProtoPilot is responding…" : "ProtoPilot · Online"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Chat Messages Body - full height scrolling */}
+            <div ref={chatScrollRef} className="flex-1 space-y-4 overflow-y-auto py-4 pr-1">
+              {conversation.length > 0 ? (
+                conversation.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={cn("flex gap-3", msg.role === "user" ? "justify-end" : "justify-start")}
+                  >
+                    {msg.role !== "user" && (
+                      <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand mt-0.5">
+                        <Bot size={15} />
+                      </div>
+                    )}
+                    <div
+                      className={cn(
+                        "text-xs leading-relaxed max-w-[85%]",
+                        msg.role === "user"
+                          ? "rounded-2xl rounded-tr-sm bg-brand px-4 py-2.5 text-white shadow-sm"
+                          : "text-ink-strong py-1"
+                      )}
+                    >
+                      {msg.content && (msg.role === "assistant" ? <AssistantMarkdown>{msg.content}</AssistantMarkdown> : <p className="whitespace-pre-line">{msg.content}</p>)}
+                      {msg.artifact && <ChatArtifact artifact={msg.artifact} onExpand={() => setExpandedArtifact(msg.artifact ?? null)} />}
+                      <span className={cn("block mt-1 text-[9px]", msg.role === "user" ? "text-white/70 text-right" : "text-faint")}>
+                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : activeGeneration ? (
+                <div className="flex justify-end gap-3">
+                  <div className="rounded-2xl rounded-tr-sm bg-brand px-4 py-2.5 text-xs text-white max-w-[85%] shadow-sm leading-relaxed">
+                    <p className="whitespace-pre-line">{activeGeneration}</p>
+                    <span className="block mt-1 text-[9px] text-white/70 text-right">Just now</span>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Assistant Working Bubble - NO BACKGROUND */}
+              {busy && (
+                <div className="flex items-start gap-3">
+                  <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand mt-0.5">
+                    <Bot size={15} />
+                  </div>
+                  <div className="py-1 text-xs text-ink-strong max-w-[85%] space-y-1">
+                    <div className="flex items-center gap-2 font-medium text-brand">
+                      <LoaderCircle className="animate-spin" size={14} />
+                      <span>ProtoPilot is responding…</span>
+                    </div>
+                    {notice && <p className="text-[11px] text-body">{notice}</p>}
+                  </div>
+                </div>
+              )}
+
+              {/* Assistant Streamed Reply - NO BACKGROUND */}
+              {chatReply && !conversation.some((m) => m.content === chatReply) && (
+                <div className="flex items-start gap-3">
+                  <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand mt-0.5">
+                    <Bot size={15} />
+                  </div>
+                  <div className="py-1 text-xs text-ink-strong max-w-[85%]">
+                    <AssistantMarkdown>{chatReply}</AssistantMarkdown>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Chat Input Footer */}
+            <div className="pt-2">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (busy) {
+                    generationControllerRef.current?.abort("cancelled");
+                  } else if (prompt.trim()) {
+                    void generateIdea(prompt);
+                  }
+                }}
+                className="flex items-center gap-2 rounded-2xl border border-line-strong bg-white p-2.5 shadow-panel"
+              >
+                <label className="sr-only" htmlFor="chat-reply-input">
+                  Your message
+                </label>
+                <textarea
+                  id="chat-reply-input"
+                  rows={2}
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder="Ask ProtoPilot anything about your design…"
+                  className="w-full resize-none border-0 bg-transparent p-2 text-xs text-ink outline-none"
+                />
+                {busy ? (
+                  <button
+                    type="button"
+                    onClick={() => generationControllerRef.current?.abort("cancelled")}
+                    className="self-end inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-danger px-3.5 text-xs font-semibold text-white shadow-button hover:bg-danger/90 cursor-pointer shrink-0"
+                    title="Stop response"
+                  >
+                    <Square size={12} className="fill-current" />
+                    <span className="hidden sm:inline">Stop</span>
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={!prompt.trim()}
+                    className="self-end inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-brand px-3.5 text-xs font-semibold text-white shadow-button hover:bg-brand-strong disabled:opacity-50 cursor-pointer shrink-0"
+                    title="Send message"
+                  >
+                    <Send size={13} />
+                    <span className="hidden sm:inline">Send</span>
+                  </button>
+                )}
+              </form>
+            </div>
+          </main>
+        )
       ) : (
         /* Full Active Project Workbench */
         <main id="workspace" className={"mx-auto grid w-full max-w-[1600px] grid-cols-[minmax(255px,292px)_minmax(400px,1fr)_minmax(270px,310px)] items-start gap-[18px] px-[26px] py-[22px] pb-8 max-[1180px]:grid-cols-[minmax(240px,280px)_minmax(380px,1fr)] max-[760px]:flex max-[760px]:flex-col max-[760px]:gap-[13px] max-[760px]:px-3 max-[760px]:py-4 max-[760px]:pb-[22px]"}>
@@ -960,7 +972,7 @@ export default function WorkbenchPage() {
                 </div>
                 <div>
                   <h2>Hardware assistant</h2>
-                  <span><span className={"inline-block size-[5px] rounded-full bg-pass"} />Gemma 4 · Online</span>
+                  <span><span className={cn("inline-block size-[5px] rounded-full", busy ? "bg-amber-500 animate-pulse" : "bg-pass")} />{busy ? "ProtoPilot · Responding…" : "ProtoPilot · Online"}</span>
                 </div>
               </div>
               <div ref={chatScrollRef} className={"space-y-2.5 p-[13px] max-h-[320px] overflow-y-auto"}>
@@ -968,25 +980,29 @@ export default function WorkbenchPage() {
                   conversation.map((message) => (
                     <div
                       className={cn(
-                        "rounded-[9px_9px_9px_3px] border border-line-soft bg-subtle p-2.5 [&>p]:m-0 [&>p]:whitespace-pre-line [&>p]:text-[10px] [&>p]:leading-[1.55] [&>p]:text-body [&>span]:mt-[7px] [&>span]:block [&>span]:text-[8px] [&>span]:text-faint",
-                        message.role === "user" ? "ml-[22px] rounded-[9px_9px_3px_9px] border-brand-soft bg-brand-soft [&>p]:text-brand-strong [&>span]:text-right" : ""
+                        "text-[10px] leading-[1.55]",
+                        message.role === "user"
+                          ? "ml-[22px] rounded-[9px_9px_3px_9px] border border-brand-soft bg-brand-soft p-2.5 text-brand-strong [&>span]:text-right"
+                          : "text-ink-strong py-1"
                       )}
                       key={message.id}
                     >
                       {message.content && (message.role === "assistant" ? <AssistantMarkdown>{message.content}</AssistantMarkdown> : <p>{message.content}</p>)}
                       {message.artifact && <ChatArtifact artifact={message.artifact} onExpand={() => setExpandedArtifact(message.artifact ?? null)} />}
-                      <span>{message.role === "user" ? "You" : "Assistant"} · {new Date(message.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
+                      <span className="mt-[7px] block text-[8px] text-faint">
+                        {message.role === "user" ? "You" : "Assistant"} · {new Date(message.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                      </span>
                     </div>
                   ))
                 ) : (
-                  <div className={"rounded-[9px_9px_9px_3px] border border-line-soft bg-subtle p-2.5 [&>p]:m-0 [&>p]:text-[10px] [&>p]:leading-[1.55] [&>p]:text-body [&>span]:mt-[7px] [&>span]:block [&>span]:text-[8px] [&>span]:text-faint"}>
+                  <div className={"py-1 text-[10px] leading-[1.55] text-body"}>
                     <p>Assistant ready for <strong>{project.title}</strong>. Ask to swap pins, add components, or modify thresholds.</p>
-                    <span>Assistant · Ready</span>
+                    <span className="mt-1 block text-[8px] text-faint">Assistant · Ready</span>
                   </div>
                 )}
                 {busy && !chatReply && <p className="text-[10px] text-quiet">ProtoPilot is responding… {generationSeconds}s</p>}
                 {chatReply && !conversation.some((message) => message.content === chatReply) && (
-                  <div className="rounded-[9px_9px_9px_3px] border border-line-soft bg-subtle p-2.5 text-[10px] leading-[1.55] text-body">
+                  <div className="py-1 text-[10px] leading-[1.55] text-ink-strong">
                     <AssistantMarkdown>{chatReply}</AssistantMarkdown>
                   </div>
                 )}
@@ -999,7 +1015,11 @@ export default function WorkbenchPage() {
                 className={"mx-3 rounded-[9px] border border-line-strong bg-white p-2"}
                 onSubmit={(event) => {
                   event.preventDefault();
-                  reviseProject();
+                  if (busy) {
+                    generationControllerRef.current?.abort("cancelled");
+                  } else {
+                    reviseProject();
+                  }
                 }}
               >
                 <label className="sr-only" htmlFor="revision-request">
@@ -1015,14 +1035,27 @@ export default function WorkbenchPage() {
                 />
                 <div className={"flex items-center justify-between text-[8px] text-faint"}>
                   <span>Updates circuit model & derived firmware</span>
-                  <button
-                    className={"grid size-[26px] place-items-center rounded-[7px] bg-brand text-white disabled:opacity-45 border-0 cursor-pointer"}
-                    type="submit"
-                    disabled={busy || !revision.trim()}
-                    aria-label="Send request"
-                  >
-                    {busy ? <LoaderCircle className="animate-spin" size={15} /> : <Send size={15} />}
-                  </button>
+                  {busy ? (
+                    <button
+                      className={"grid size-[26px] place-items-center rounded-[7px] bg-danger text-white border-0 cursor-pointer"}
+                      type="button"
+                      onClick={() => generationControllerRef.current?.abort("cancelled")}
+                      aria-label="Stop response"
+                      title="Stop"
+                    >
+                      <Square size={11} className="fill-current" />
+                    </button>
+                  ) : (
+                    <button
+                      className={"grid size-[26px] place-items-center rounded-[7px] bg-brand text-white disabled:opacity-45 border-0 cursor-pointer"}
+                      type="submit"
+                      disabled={!revision.trim()}
+                      aria-label="Send request"
+                      title="Send"
+                    >
+                      <Send size={14} />
+                    </button>
+                  )}
                 </div>
               </form>
               <div className={"mt-[11px] border-t border-line-soft px-[13px] py-[9px] text-[8px] leading-[1.4] text-faint"}>
