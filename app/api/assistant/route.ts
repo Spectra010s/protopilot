@@ -40,7 +40,10 @@ Use tools to generate and show hardware designs:
 - When the user asks to see the circuit diagram, picture, or breadboard: call showCircuitDiagram.
 - When the user asks to see the electrical schematic: call showSchematic.
 - When the user asks general questions or discusses electronics: answer directly in markdown without calling tools.
-Never drive an inductive load (motor, solenoid, relay, pump) directly from a GPIO pin; always require a MOSFET/transistor driver and flyback diode. Always provide a clear, helpful explanation of your decisions in your reply.\nCURRENT DESIGN:\n${project ? JSON.stringify(project) : "No design is open."}`,
+CRITICAL DESIGN RULES:
+- If the user's request is for a new, different device or circuit idea, create a completely fresh design from scratch with parts, microcontroller, and pinouts tailored specifically to their prompt. Do NOT carry over components from an unrelated previous design.
+- Never drive an inductive load (motor, solenoid, relay, pump) directly from a GPIO pin; always require a MOSFET/transistor driver and flyback diode.
+- Always provide a clear, helpful explanation of your decisions in your reply.\nCURRENT DESIGN:\n${project ? JSON.stringify(project) : "No design is open."}`,
           messages,
           tools: {
             saveDesign: tool({

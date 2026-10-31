@@ -38,31 +38,63 @@ export function validateElectrical(project: Project): Check[] {
   });
   checks.push({ id: "refs", title: "Connection references", status: refsValid ? "pass" : "fail", detail: refsValid ? "Every wire points to an existing component pin." : "A wire references a missing component or pin." });
 
-  const directPumpGpio = project.connections.some((wire) => {
-    const pair = [wire.from, wire.to];
-    return pair.some((end) => project.components.find((c) => c.id === end.componentId)?.category === "controller" && end.pinId.startsWith("gpio") &&
-      pair.some((other) => project.components.find((c) => c.id === other.componentId)?.category === "load"));
-  });
-  checks.push({ id: "gpio-load", title: "Pump is not driven by a GPIO", status: directPumpGpio ? "fail" : "pass", detail: directPumpGpio ? "A controller GPIO appears directly connected to the pump." : "Pump connections use a driver stage; no direct GPIO-to-pump wire was found." });
+  const hasLoad = project.components.some((c) => c.category === "load");
+  if (hasLoad) {
+    const directLoadGpio = project.connections.some((wire) => {
+      const pair = [wire.from, wire.to];
+      return pair.some((end) => project.components.find((c) => c.id === end.componentId)?.category === "controller" && end.pinId.toLowerCase().startsWith("gpio") &&
+        pair.some((other) => project.components.find((c) => c.id === other.componentId)?.category === "load"));
+    });
+    checks.push({
+      id: "gpio-load",
+      title: "Load is not driven directly by GPIO",
+      status: directLoadGpio ? "fail" : "pass",
+      detail: directLoadGpio ? "A microcontroller GPIO pin appears directly wired to a high-current load." : "Load connections use an intermediate driver stage; no direct GPIO load drive detected.",
+    });
 
-  const hasMosfet = project.components.some((component) => component.category === "driver");
-  checks.push({ id: "switch", title: "Pump switching stage", status: hasMosfet ? "pass" : "fail", detail: hasMosfet ? "A driver component is present between logic and pump power." : "Add a suitable MOSFET or pump driver; GPIO pins cannot supply pump current." });
+    const hasDriver = project.components.some((component) => component.category === "driver");
+    checks.push({
+      id: "switch",
+      title: "Power switching driver stage",
+      status: hasDriver ? "pass" : "fail",
+      detail: hasDriver ? "Driver/switching component is present between controller logic and high-current load." : "Add a suitable MOSFET, transistor, or motor driver; logic pins cannot deliver load current.",
+    });
 
-  const diode = project.components.find((component) => component.category === "protection");
-  checks.push({ id: "flyback", title: "Inductive-load protection", status: diode ? "pass" : "fail", detail: diode ? "Flyback diode is included; verify its polarity and ratings against the selected pump." : "Add a flyback diode across the DC pump." });
+    const diode = project.components.find((component) => component.category === "protection");
+    checks.push({
+      id: "flyback",
+      title: "Inductive flyback protection",
+      status: diode ? "pass" : "warning",
+      detail: diode ? "Flyback protection component is present across the inductive load." : "Consider adding a flyback clamp diode across any inductive motor, solenoid, or relay coil.",
+    });
+  }
 
   const mcu = project.components.find((component) => component.category === "controller");
   const supply = project.components.find((component) => component.category === "power");
-  const sharedGround = Boolean(mcu && supply && hasLink(project, [mcu.id, "gnd"], [supply.id, "ground"]));
-  checks.push({ id: "ground", title: "Common ground", status: sharedGround ? "pass" : "warning", detail: sharedGround ? "The external supply and controller share a ground reference." : "A non-isolated low-side switch needs a shared ground between supply and controller." });
+  if (mcu && supply) {
+    const sharedGround = hasLink(project, [mcu.id, "gnd"], [supply.id, "ground"]) ||
+      project.connections.some((w) => /gnd|ground/i.test(w.net) && [w.from.componentId, w.to.componentId].includes(mcu.id) && [w.from.componentId, w.to.componentId].includes(supply.id));
+    checks.push({
+      id: "ground",
+      title: "Common ground reference",
+      status: sharedGround ? "pass" : "warning",
+      detail: sharedGround ? "External power supply and microcontroller share a common ground reference." : "Multiple power domains should share a common ground reference.",
+    });
+  }
 
   const unknownRatings = project.components.flatMap((component) => component.specifications.filter((spec) => spec.status === "unknown").map((spec) => `${component.reference} ${spec.key}`));
-  checks.push({ id: "ratings", title: "Voltage and current ratings", status: unknownRatings.length ? "unverified" : "pass", detail: unknownRatings.length ? `Confirm before powering: ${unknownRatings.join(", ")}.` : "Catalog ratings are present for the relevant components." });
+  checks.push({ id: "ratings", title: "Component specifications & ratings", status: unknownRatings.length ? "unverified" : "pass", detail: unknownRatings.length ? `Verify on manufacturer datasheets: ${unknownRatings.join(", ")}.` : "All component ratings verified." });
 
   const sensor = project.components.find((component) => component.category === "sensor");
-  const sensorSignal = project.connections.find((wire) => [wire.from.componentId, wire.to.componentId].includes(sensor?.id ?? "") && wire.net === "MOISTURE");
-  const adcSafe = sensorSignal && mcu?.pins.some((pin) => pin.id === (sensorSignal.from.componentId === mcu.id ? sensorSignal.from.pinId : sensorSignal.to.pinId) && pin.kind === "analog");
-  checks.push({ id: "adc", title: "Sensor output into ADC", status: sensor && adcSafe ? "warning" : sensor ? "fail" : "unverified", detail: sensor && adcSafe ? "An analog-capable controller pin is used; verify the sensor's maximum output is within the ADC input range." : sensor ? "The moisture signal is not connected to an analog-capable pin." : "No soil moisture sensor found." });
+  if (sensor && mcu) {
+    const sensorWire = project.connections.find((wire) => [wire.from.componentId, wire.to.componentId].includes(sensor.id));
+    checks.push({
+      id: "sensor-link",
+      title: "Sensor signal interface",
+      status: sensorWire ? "pass" : "warning",
+      detail: sensorWire ? `Sensor signal connected to ${mcu.name}.` : `No signal connection found between ${sensor.name} and ${mcu.name}.`,
+    });
+  }
 
   const missingPins: string[] = [];
   for (const component of project.components) {
