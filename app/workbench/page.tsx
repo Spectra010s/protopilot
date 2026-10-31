@@ -994,49 +994,55 @@ export default function WorkbenchPage() {
             {workbenchSubView === "circuit" && (
                 /* ── Fullscreen Circuit Canvas View ── */
                 <div className="flex h-[calc(100vh-125px)] flex-col bg-canvas">
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-white px-4 py-2.5 sm:px-6">
-                    <button
-                      type="button"
-                      onClick={() => setWorkbenchSubView("overview")}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-body hover:bg-subtle cursor-pointer transition shrink-0"
-                    >
-                      <ArrowLeft size={14} /> Back to Overview
-                    </button>
-
-                    <div className="flex items-center rounded-xl bg-chip/80 p-1 border border-line-soft shrink-0">
+                  <div className="flex flex-col border-b border-line bg-white px-4 sm:px-6">
+                    {/* Top Row: Back to Overview (Left) & Download SVG (Right) */}
+                    <div className="flex items-center justify-between py-2.5">
                       <button
                         type="button"
-                        onClick={() => setView("breadboard")}
-                        className={cn(
-                          "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer",
-                          view === "breadboard" ? "bg-white text-ink-strong shadow-xs" : "text-quiet hover:text-ink"
-                        )}
+                        onClick={() => setWorkbenchSubView("overview")}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-body hover:bg-subtle cursor-pointer transition shrink-0"
                       >
-                        <CircuitBoard size={14} className={view === "breadboard" ? "text-brand" : ""} />
-                        <span>Breadboard</span>
+                        <ArrowLeft size={14} /> Back to Overview
                       </button>
+
                       <button
                         type="button"
-                        onClick={() => setView("schematic")}
-                        className={cn(
-                          "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer",
-                          view === "schematic" ? "bg-white text-ink-strong shadow-xs" : "text-quiet hover:text-ink"
-                        )}
+                        onClick={downloadDiagram}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-body hover:bg-subtle cursor-pointer transition shrink-0"
+                        title={`Download ${view} SVG`}
                       >
-                        <FlaskConical size={14} className={view === "schematic" ? "text-brand" : ""} />
-                        <span>Schematic</span>
+                        <Download size={13} />
+                        <span>Download SVG</span>
                       </button>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={downloadDiagram}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-body hover:bg-subtle cursor-pointer transition shrink-0"
-                      title={`Download ${view} SVG`}
-                    >
-                      <Download size={13} />
-                      <span className="hidden sm:inline">Download</span> SVG
-                    </button>
+                    {/* Sub-row: Tabs centered directly underneath */}
+                    <div className="flex items-center justify-center pb-2.5">
+                      <div className="flex items-center rounded-xl bg-chip/80 p-1 border border-line-soft">
+                        <button
+                          type="button"
+                          onClick={() => setView("breadboard")}
+                          className={cn(
+                            "flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-semibold transition cursor-pointer",
+                            view === "breadboard" ? "bg-white text-ink-strong shadow-xs" : "text-quiet hover:text-ink"
+                          )}
+                        >
+                          <CircuitBoard size={14} className={view === "breadboard" ? "text-brand" : ""} />
+                          <span>Breadboard View</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setView("schematic")}
+                          className={cn(
+                            "flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-semibold transition cursor-pointer",
+                            view === "schematic" ? "bg-white text-ink-strong shadow-xs" : "text-quiet hover:text-ink"
+                          )}
+                        >
+                          <FlaskConical size={14} className={view === "schematic" ? "text-brand" : ""} />
+                          <span>Schematic View</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Circuit Canvas Full Screen with ZoomableCircuitView */}

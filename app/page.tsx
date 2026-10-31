@@ -41,9 +41,9 @@ export default function LandingPage() {
         <div className={"mt-8 flex flex-wrap items-center justify-center gap-3"}>
           <Link
             href="/workbench"
-            className={"inline-flex min-h-[44px] items-center justify-center gap-2.5 rounded-xl bg-brand px-6 text-[14px] font-semibold text-white shadow-button hover:bg-brand-strong no-underline transition-colors"}
+            className={"inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-brand px-6 text-[14px] font-semibold text-white shadow-button hover:bg-brand-strong no-underline transition-colors"}
           >
-            <Sparkles size={17} /> Launch Workbench <ArrowRight size={17} />
+            Launch Workbench <ArrowRight size={17} />
           </Link>
           <a
             href="#local-first"
