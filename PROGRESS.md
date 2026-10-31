@@ -40,7 +40,8 @@
 - [x] Projects autosave to browser IndexedDB; conversation messages are stored per project.
 - [x] My projects dialog lists saved drafts and reopens the selected project.
 - [x] Firmware can be copied/downloaded; connection change demonstration updates the same model used by views/table.
-- [ ] Multi-project save/open library and export are not implemented.
+- [x] Multi-project save/open library is implemented in browser IndexedDB.
+- [ ] Export (project file, CSV/PDF, diagram download) is not implemented.
 
 ### Phase 4 — AI integration
 
@@ -74,3 +75,5 @@
 - Run a browser-driven flow to click both diagram tabs and check mobile layout.
 - Browser-driven click test for the project library and mobile layout remains outstanding.
 - Add export after the core flow is stable.
+- **Type scale (deferred by user, not done):** the UI leans small — many labels are 8–10px and the body text is 13px. Target: body 13–14px, labels never below 10–11px, headings 15–18px. Do this as its own pass so it does not collide with the Tailwind/token work, and re-check every `text-[Npx]` utility in `app/page.tsx` at that time.
+- Wire or hide the remaining non-functional affordances (Download diagram, Expand, zoom +/−, Edit overview, Add component, Export CSV, full assembly guide, constraint chips, assistant settings).

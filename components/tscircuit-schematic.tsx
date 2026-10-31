@@ -29,7 +29,7 @@ export function makeTscircuitSource(project: Project) {
 export function TscircuitSchematic({ project }: { project: Project }) {
   const code = makeTscircuitSource(project);
   return (
-    <div className="runframe-shell">
+    <div className="h-full min-h-[430px] [&>*]:min-h-[430px] max-[760px]:min-h-[310px] max-[760px]:[&>*]:min-h-[310px]">
       <RunFrame
         key={`runframe-${project.revision}`}
         fsMap={{ "main.tsx": code }}
