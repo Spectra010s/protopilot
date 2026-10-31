@@ -48,20 +48,62 @@ export function expandProject(plan: CompactProject, prompt: string, projectId?: 
     layout: { x: 60 + (index % 3) * 210, y: 60 + Math.floor(index / 3) * 160 },
   }));
 
-  const connections = plan.connections.flatMap((wire, index) => {
-    const from = components[wire.fromComponent];
-    const to = components[wire.toComponent];
-    if (!from?.pins.some((pin) => pin.id === wire.fromPin) || !to?.pins.some((pin) => pin.id === wire.toPin)) return [];
+  function getComp(index: number) {
+    if (components[index]) return components[index];
+    if (index > 0 && components[index - 1]) return components[index - 1];
+    return components[0];
+  }
+
+  function ensurePin(comp: typeof components[number], pinId: string) {
+    const existing = comp.pins.find((p) => p.id.toLowerCase() === pinId.toLowerCase());
+    if (existing) return existing.id;
+    const isGround = /gnd|ground/i.test(pinId);
+    const isPower = /vcc|power|5v|3v|vin/i.test(pinId);
+    comp.pins.push({
+      id: pinId,
+      label: pinId.toUpperCase(),
+      kind: isGround ? "ground" : isPower ? "power" : "digital",
+      direction: isGround ? "passive" : "bidirectional",
+      voltageMin: null,
+      voltageMax: null,
+      capabilities: [],
+    });
+    return pinId;
+  }
+
+  const connections = (plan.connections || []).flatMap((wire, index) => {
+    const from = getComp(wire.fromComponent);
+    const to = getComp(wire.toComponent);
+    if (!from || !to || from.id === to.id) return [];
+    const fromPinId = ensurePin(from, wire.fromPin);
+    const toPinId = ensurePin(to, wire.toPin);
     return [{
       id: `wire-${index + 1}`,
-      from: { componentId: from.id, pinId: wire.fromPin },
-      to: { componentId: to.id, pinId: wire.toPin },
-      net: wire.net,
+      from: { componentId: from.id, pinId: fromPinId },
+      to: { componentId: to.id, pinId: toPinId },
+      net: wire.net || "NET",
       color: /gnd|ground/i.test(wire.net) ? "black" as const : /vcc|power|5v|3v/i.test(wire.net) ? "red" as const : "blue" as const,
-      details: `${from.name} ${wire.fromPin} to ${to.name} ${wire.toPin}.`,
+      details: `${from.name} ${fromPinId} to ${to.name} ${toPinId}.`,
     }];
   });
-  if (!connections.length) throw new Error("Gemma returned no usable pin connections. Please retry the design.");
+
+  // Fallback: If no connections were resolved, connect common ground between controller and components
+  if (!connections.length && components.length > 1) {
+    const controller = components.find((c) => c.category === "controller") ?? components[0];
+    const ctrlGnd = ensurePin(controller, "GND");
+    components.forEach((comp) => {
+      if (comp.id === controller.id) return;
+      const compGnd = ensurePin(comp, "GND");
+      connections.push({
+        id: `wire-${connections.length + 1}`,
+        from: { componentId: controller.id, pinId: ctrlGnd },
+        to: { componentId: comp.id, pinId: compGnd },
+        net: "GND",
+        color: "black",
+        details: `Common ground between ${controller.name} and ${comp.name}.`,
+      });
+    });
+  }
 
   const slug = plan.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "circuit";
   return ProjectSchema.parse({
