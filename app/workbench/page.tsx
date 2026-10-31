@@ -65,6 +65,7 @@ export default function WorkbenchPage() {
   const [view, setView] = useState<View>("breadboard");
   const [prompt, setPrompt] = useState("");
   const [activeGeneration, setActiveGeneration] = useState<string | null>(null);
+  const [chatReply, setChatReply] = useState<string | null>(null);
   const [revision, setRevision] = useState("");
   const [pendingGeneration, setPendingGeneration] = useState<{ prompt: string; projectId: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -198,6 +199,7 @@ export default function WorkbenchPage() {
     const initialPrompt = textToGenerate;
     const projectId = createId();
     setActiveGeneration(initialPrompt);
+    setChatReply(null);
     setBusy(true);
     setGenerationSeconds(0);
     setNotice("Request sent to Gemma 4. Designing your circuit...");
@@ -221,6 +223,7 @@ export default function WorkbenchPage() {
       const decoder = new TextDecoder();
       let buffer = "";
       let body: { project: unknown; questions: string[] } | null = null;
+      let reply: string | null = null;
       while (true) {
         const { value, done } = await reader.read();
         buffer += decoder.decode(value, { stream: !done });
@@ -228,12 +231,19 @@ export default function WorkbenchPage() {
         buffer = lines.pop() ?? "";
         for (const line of lines) {
           if (!line.trim()) continue;
-          const event = JSON.parse(line) as { type: string; message?: string; error?: string; project?: unknown; questions?: string[] };
+          const event = JSON.parse(line) as { type: string; message?: string; error?: string; reply?: string; project?: unknown; questions?: string[] };
           if (event.type === "status" && event.message) setNotice(event.message);
           if (event.type === "error") throw new Error(event.error ?? "Generation failed");
+          if (event.type === "chat") reply = event.reply ?? "";
           if (event.type === "result") body = { project: event.project, questions: event.questions ?? [] };
         }
         if (done) break;
+      }
+      if (reply !== null) {
+        setChatReply(reply);
+        setNotice("ProtoPilot replied.");
+        setPrompt("");
+        return;
       }
       if (!body) throw new Error("Gemma ended without a project response.");
       await recordMessage("user", initialPrompt, projectId);
@@ -336,6 +346,7 @@ export default function WorkbenchPage() {
     setProject(null);
     setPendingGeneration(null);
     setActiveGeneration(null);
+    setChatReply(null);
     setPrompt("");
     setRevision("");
     setNotice("Canvas cleared. Describe what you'd like to build.");
@@ -489,7 +500,8 @@ export default function WorkbenchPage() {
               <div className="mt-5 border-t border-line pt-5" aria-live="polite">
                 <p className="text-[10px] font-semibold text-quiet">You sent</p>
                 <p className="mt-1 rounded-xl bg-brand-soft p-3 text-xs text-ink-strong">{activeGeneration}</p>
-                <p className="mt-2 text-xs text-body">{busy ? `Gemma 4 is working on your design… ${generationSeconds}s` : notice}</p>
+                <p className="mt-2 text-xs text-body">{busy ? `ProtoPilot is responding… ${generationSeconds}s` : notice}</p>
+                {chatReply && <p className="mt-2 rounded-xl border border-line bg-subtle p-3 text-xs text-body">{chatReply}</p>}
                 {busy && <button type="button" className="mt-2 text-xs font-semibold text-brand" onClick={() => generationControllerRef.current?.abort("cancelled")}>Cancel request</button>}
               </div>
             )}

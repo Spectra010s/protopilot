@@ -8,17 +8,18 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Add a project description of at least 8 characters." }, { status: 400 });
 
   try {
-    const result = getProjectProvider().streamGenerate(parsed.data);
+    const provider = getProjectProvider();
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         const send = (data: unknown) => controller.enqueue(encoder.encode(`${JSON.stringify(data)}\n`));
         try {
-          send({ type: "status", message: "Gemma is designing your circuit." });
+          send({ type: "status", message: "ProtoPilot is responding to your prompt." });
+          const result = provider.streamGenerate(parsed.data);
           let lastProgress = "";
           for await (const partial of result.partialOutputStream) {
-            const title = partial.title;
-            const count = partial.components?.length ?? 0;
+            const title = partial.project?.title;
+            const count = partial.project?.components?.length ?? 0;
             const message = title ? `Designing ${title}${count ? ` · ${count} components` : ""}` : count ? `Designing ${count} components` : "";
             if (message && message !== lastProgress) {
               send({ type: "status", message });
@@ -26,7 +27,11 @@ export async function POST(request: Request) {
             }
           }
           const output = await result.output;
-          send({ type: "result", project: expandProject(output, parsed.data.prompt, parsed.data.projectId), questions: [] });
+          if (output.project) {
+            send({ type: "result", project: expandProject(output.project, parsed.data.prompt, parsed.data.projectId), questions: [] });
+          } else {
+            send({ type: "chat", reply: output.reply || "I'm ProtoPilot, an electronics design assistant. What would you like to build?" });
+          }
         } catch (error) {
           send({ type: "error", error: error instanceof Error ? error.message : "Project generation failed." });
         } finally {

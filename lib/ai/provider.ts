@@ -61,8 +61,8 @@ ${JSON.stringify(request.constraints ?? {})}`, GenerationOutputSchema);
     return streamText({
       model: this.model,
       instructions: DESIGN_INSTRUCTIONS,
-      prompt: `Create a compact, wiring-ready circuit plan for this request. Use 3 to 8 components. Include only the pins used by connections, and refer to components by their zero-based array indexes. Every connection must use a pin ID listed on that component. Keep firmware under 40 lines. Never connect a motor or pump directly to a controller GPIO; include a driver, flyback protection, separate load supply, and common ground where needed. Do not invent confirmed ratings.\nUSER REQUEST:\n${request.prompt}\nOPTIONAL CONSTRAINTS:\n${JSON.stringify(request.constraints ?? {})}`,
-      output: Output.object({ schema: CompactProjectSchema }),
+      prompt: `Reply to the user as ProtoPilot. If they want a hardware design, include a compact, wiring-ready project and a brief reply. For a question or conversation that does not request a new design, answer it and set project to null. For a project, use 3 to 8 components, include only connected pins, refer to components by zero-based array indexes, and keep firmware under 40 lines. Never connect a motor or pump directly to GPIO; include appropriate driver and protection. Do not invent confirmed ratings.\nUSER REQUEST:\n${request.prompt}\nOPTIONAL CONSTRAINTS:\n${JSON.stringify(request.constraints ?? {})}`,
+      output: Output.object({ schema: z.object({ reply: z.string(), project: CompactProjectSchema.nullable() }) }),
       temperature: 0.2,
       maxOutputTokens: 8192,
       providerOptions: { google: { thinkingConfig: { thinkingLevel: "minimal" } } },
@@ -70,14 +70,14 @@ ${JSON.stringify(request.constraints ?? {})}`, GenerationOutputSchema);
   }
 
   async revise({ project, request }: RevisionRequest): Promise<RevisionResult> {
-    const resultSchema = z.object({ project: ProjectSchema, message: z.string().min(1) });
-    const output = await this.askObject(`${DESIGN_INSTRUCTIONS}\nFor revisions, keep schemaVersion 1, increment revision, preserve unknown/assumed values, and keep the project, firmware, connections, and component pins consistent.`, `Return an object with "project" containing the complete revised project and "message" containing a short explanation.
+    const resultSchema = z.object({ project: ProjectSchema.nullable(), message: z.string().min(1) });
+    const output = await this.askObject(`${DESIGN_INSTRUCTIONS}\nFor questions or conversation, answer in message and set project to null. Only return a complete revised project when the user asks to change the design. For revisions, keep schemaVersion 1, increment revision, preserve unknown/assumed values, and keep the project, firmware, connections, and component pins consistent.`, `Reply to the user in message. Include a revised project only if they requested a design change.
 CURRENT PROJECT:
 ${JSON.stringify(project)}
 
 USER CHANGE:
 ${request}`, resultSchema);
-    return output;
+    return { project: output.project ? { ...output.project, id: project.id } : project, message: output.message };
   }
 }
 
