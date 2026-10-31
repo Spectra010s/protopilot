@@ -565,18 +565,22 @@ export default function WorkbenchPage() {
                   {
                     title: "Smart Plant Watering",
                     prompt: "I want to build a smart plant watering system with a capacitive soil moisture sensor, ESP32, low-side MOSFET switch for a 5V pump, flyback diode, and a manual watering button.",
+                    icon: <Sprout size={15} className="text-brand shrink-0" />,
                   },
                   {
                     title: "Solar Battery Charger",
                     prompt: "Design a solar lithium battery charger monitor with INA219 current sensor, TP4056 charge controller, 18650 cell, and an OLED display.",
+                    icon: <Zap size={15} className="text-brand shrink-0" />,
                   },
                   {
                     title: "Servo Robotic Arm",
                     prompt: "Build an 8-servo quadruped robot controller using a Raspberry Pi Pico, PCA9685 I2C PWM driver, and a 5V 5A UBEC power supply.",
+                    icon: <Bot size={15} className="text-brand shrink-0" />,
                   },
                   {
                     title: "Ultrasonic Distance Alarm",
                     prompt: "Create an ultrasonic parking sensor alarm with HC-SR04, active buzzer, RGB LED indicator, and Arduino Nano.",
+                    icon: <Waves size={15} className="text-brand shrink-0" />,
                   },
                 ].map((card) => (
                   <button
@@ -585,9 +589,12 @@ export default function WorkbenchPage() {
                     onClick={() => {
                       if (!busy) void sendMessage(card.prompt);
                     }}
-                    className="flex flex-col gap-1.5 rounded-xl border border-line bg-white p-3.5 text-left shadow-xs hover:border-brand hover:shadow-sm cursor-pointer transition"
+                    className="flex flex-col gap-1.5 rounded-xl border border-line bg-white p-3.5 text-left shadow-xs hover:border-brand hover:shadow-sm cursor-pointer transition group"
                   >
-                    <strong className="text-xs font-semibold text-ink-strong">{card.title}</strong>
+                    <div className="flex items-center gap-2 text-xs font-semibold text-ink-strong group-hover:text-brand">
+                      {card.icon}
+                      <span>{card.title}</span>
+                    </div>
                     <p className="text-[11px] leading-relaxed text-quiet line-clamp-2">{card.prompt}</p>
                   </button>
                 ))}
