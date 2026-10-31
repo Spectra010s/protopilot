@@ -1,6 +1,6 @@
 # ProtoPilot assistant
 
-The workbench sends each user turn to `POST /api/assistant`. The request includes the current design, a conversation ID, and recent text messages. Gemma streams ordinary text into the chat. It calls a tool only when the user asks for an action the app supports.
+The workbench sends each user turn to `POST /api/assistant`. The request includes the current design, a conversation ID, and recent text messages. Gemma streams ordinary text into the chat. The route offers product tools and instructs Gemma to call one when a user asks for that action.
 
 ## Tools
 
@@ -11,7 +11,7 @@ The workbench sends each user turn to `POST /api/assistant`. The request include
 | `showSchematic` | Adds the current schematic to chat. |
 | `showCode` | Adds the current Arduino firmware to chat. |
 
-Questions such as “who are you?” or “why is there a diode?” should receive text without a tool call. The active design and conversation remain intact. The model sees the current design and the last 20 text turns.
+Questions such as “who are you?” or “why is there a diode?” should receive text without a tool call. The active design and conversation remain intact in that path. The model sees the current design and the last 20 text turns.
 
 ## Stream contract
 
@@ -22,9 +22,9 @@ The response is newline-delimited JSON (`application/x-ndjson`). Events are:
 - `project` with `project`: validate and replace the active design in the client.
 - `artifact` with `kind` (`breadboard`, `schematic`, or `code`) and a project snapshot: add an expandable result card to chat. Code is read from the snapshot's `firmware` field.
 - `done`: response completed.
-- `error` with `error`: show the failure without replacing the active design.
+- `error` with `error`: show the failure. A project event from an earlier tool step may already have updated the workbench.
 
-The workbench stores text and artifact messages in IndexedDB by project ID. Artifacts contain a project snapshot so an older chat result still shows the design from that turn. A new blank conversation receives its own ID; the first design created in it uses that same ID. The current design remains saved separately as a draft.
+The workbench stores text and artifact messages in IndexedDB by project ID. Artifacts contain a project snapshot so an older chat result still shows the design from that turn. A new blank conversation receives an ID on its first send; the first design created in it uses that same ID. The current design remains saved separately as a draft.
 
 Assistant text is rendered as GitHub-flavored Markdown. Fenced code blocks and generated firmware cards have copy controls. Diagram and schematic cards open into an expanded view when clicked.
 

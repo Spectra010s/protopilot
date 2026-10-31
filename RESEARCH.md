@@ -1,6 +1,6 @@
 # ProtoPilot: technical research and proposed architecture
 
-**Status:** research only. No application implementation or dependencies have been added. The architecture below is a proposal for review.
+**Status:** historical research and proposals. The application has since been implemented; see [docs/architecture.md](docs/architecture.md) for the current design. Paths and feature plans below may be obsolete.
 
 **Workspace:** `/tmp/circuitcraft`  
 **Product name:** ProtoPilot  
@@ -228,3 +228,4 @@ Firmware should read the moisture sensor, compare against an adjustable threshol
 - [Web Speech Recognition API](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition)
 - [MediaRecorder API](https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder)
 - [Wokwi ESP32 simulation](https://docs.wokwi.com/guides/esp32)
+

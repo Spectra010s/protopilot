@@ -1,50 +1,50 @@
 # ProtoPilot
 
-ProtoPilot turns a hardware idea into an editable project representation with components, electrical pins, connections, a breadboard layout, a schematic, firmware, assembly notes, and deterministic checks.
+ProtoPilot is an open-source electronics design assistant. Describe a circuit in chat and it can create an editable project with components, pin connections, a breadboard diagram, a schematic, Arduino firmware, build steps, and review checks. You can keep talking to the assistant, ask it to change the design, or ask to see a diagram or code in the conversation.
+
+This is a working prototype. Generated hardware plans need a human review before anything is powered.
+
+## What works
+
+- **One project model:** components and connections feed the breadboard SVG, schematic SVG, wiring table, and checks.
+- **Conversational assistant:** Gemma 4 streams replies. It has tools to save a design and show the diagram, schematic, or code; ordinary questions can receive a text answer without changing the project.
+- **Local drafts:** projects and chat messages are saved in browser IndexedDB. **My projects** reopens drafts on the same device and browser profile.
+- **Useful exports:** download the current diagram as SVG, wiring rows as CSV, and Arduino firmware as a file, or copy code from chat.
+
+There are no accounts or cloud-synced projects. The active electrical checks cover a limited set of patterns and are especially tailored to the original plant-watering demo.
 
 ## Run locally
 
-Requirements: Node.js 20+ and pnpm.
+You need Node.js **22.13+** and the pinned **pnpm 11.8.0**. With Corepack available:
 
 ```bash
-pnpm install
+corepack enable
+pnpm install --frozen-lockfile
+cp .env.example .env.local
 pnpm dev
 ```
 
-The project uses Next.js App Router, TypeScript, Tailwind CSS v4, and shadcn/ui Base UI `base-nova`. `pnpm dev` and the normal production build use Turbopack. To run a separate Webpack diagnostic build, use `pnpm build -- --webpack`. Type checks and production build:
+Put a Google Gemini API key in `.env.local` as `GEMINI_API_KEY` to use the assistant. The optional `GEMMA_MODEL` defaults to `gemma-4-26b-a4b-it`. The key is read only by server routes; never put it in a `NEXT_PUBLIC_` variable or commit `.env.local`.
+
+Open the local URL printed by `pnpm dev` and go to `/workbench`. The UI can be explored without an API key, but assistant requests require one.
+
+## Check a change
 
 ```bash
 pnpm typecheck
+pnpm lint
+pnpm test:storage
 pnpm build
 ```
 
-## AI provider
+The production build also catches Next.js prerender errors that typecheck cannot. Stop a dev server in the same checkout before running a local build because both use `.next`.
 
-The app uses Gemma 4 through Vercel AI SDK and the Google provider. Copy `.env.example` to `.env.local`, add a server-side Google AI Studio key, and use the documented Gemma 4 model ID:
+## Data and hardware limits
 
-```env
-GEMINI_API_KEY=your-server-side-key
-GEMMA_MODEL=gemma-4-26b-a4b-it
-```
+Drafts stay in your browser. When you use the assistant, the current message, recent chat text, and current project go to the ProtoPilot server and then to the configured Google model. AI requests are not processed only in the browser. See [Privacy and hardware safety](docs/privacy-and-safety.md) for the data flow and electrical limits.
 
-Gemma 4 model IDs currently documented for Gemini API include `gemma-4-26b-a4b-it` and `gemma-4-31b-it`. Structured generation and project revisions are validated against the app's Zod schema before returning. `GEMMA_MODEL` and `GEMINI_API_KEY` are read only by server routes. Never add the API key to a `NEXT_PUBLIC_` variable.
+Generated wiring, firmware, and checks are drafts. Confirm parts, ratings, pin capabilities, polarity, and supply requirements against datasheets before building or powering a circuit.
 
-## Demo flow
+## Documentation and contributing
 
-1. Describe a plant watering system and select **Generate**.
-2. Inspect its components, ratings, connections, firmware, and engineering checks.
-3. Switch between **Breadboard** and **Schematic**. Both SVG views and the wiring table use the same versioned project data.
-4. Ask Gemma to move the moisture input to GPIO35. The connection and firmware update, and both views and the wiring table re-render from the changed project.
-5. Reload the page; the current project and conversation are restored from browser IndexedDB. Open **My projects** to reopen another saved design on this device.
-
-## Engineering limits
-
-- The project schema and deterministic checks catch a limited set of known issues. Passing checks do not guarantee a circuit is safe or will work.
-- Exact pump, MOSFET, diode, and sensor ratings remain unknown until part numbers and datasheets are selected.
-- The RunFrame proof of concept is retained at `components/tscircuit-schematic.tsx`. It is not loaded by the application: its published browser bundle imports runtime packages absent from its declared production dependencies, and its bundle also pulls in Radix UI packages. The active schematic is a small app-owned SVG renderer using the canonical project model.
-- Voice and image input, export, accounts, and remote persistence are not implemented. Projects currently stay in this browser; use a server-side database/object store later if cross-device access or cloud backup is needed.
-- Workspace presentation uses Tailwind utility classes in JSX. `globals.css` contains Tailwind imports, theme tokens, and base resets.
-
-## Project notes
-
-See [RESEARCH.md](./RESEARCH.md) for the technical research and [PROGRESS.md](./PROGRESS.md) for implementation status and verification notes.
+Start with the [documentation index](docs/README.md) for setup, architecture, the project model, assistant tools, and deployment. [CONTRIBUTING.md](CONTRIBUTING.md) explains the contribution workflow; [AGENTS.md](AGENTS.md) adds instructions for AI coding contributors. ProtoPilot is available under the [MIT License](LICENSE).

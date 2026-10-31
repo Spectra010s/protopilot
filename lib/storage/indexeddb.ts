@@ -5,7 +5,6 @@ import { createId } from "@/lib/id";
 
 const DB_NAME = "protopilot.v1";
 const DB_VERSION = 1;
-const LEGACY_LOCAL_STORAGE_KEY = "protopilot:project:v1";
 
 export type ProjectDraftSummary = { id: string; title: string; updatedAt: number };
 export type ProjectConversationMessage = {
@@ -98,28 +97,7 @@ export async function listProjectDrafts(): Promise<ProjectDraftSummary[]> {
   }).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-async function migrateLegacyDraft(): Promise<void> {
-  if (typeof window === "undefined") return;
-  let raw: string | null;
-  try { raw = window.localStorage.getItem(LEGACY_LOCAL_STORAGE_KEY); }
-  catch { return; }
-  if (!raw) return;
-
-  try {
-    const parsed = ProjectSchema.safeParse(JSON.parse(raw));
-    if (!parsed.success) return;
-    const database = await getDatabase();
-    if (!(await database.get("projects", parsed.data.id))) {
-      await saveProjectDraft(parsed.data);
-    }
-    window.localStorage.removeItem(LEGACY_LOCAL_STORAGE_KEY);
-  } catch (error) {
-    console.warn("Could not migrate the previous browser draft to IndexedDB.", error);
-  }
-}
-
 export async function getMostRecentProjectDraft(): Promise<Project | null> {
-  await migrateLegacyDraft();
   const database = await getDatabase();
   const rows = await database.getAll("projects");
   rows.sort((a, b) => b.updatedAt - a.updatedAt);

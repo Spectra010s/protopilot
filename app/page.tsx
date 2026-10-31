@@ -53,52 +53,52 @@ export default function LandingPage() {
           </a>
         </div>
 
-        {/* Mini preview mockup */}
-        <div className={"mt-14 w-full max-w-[820px] overflow-hidden rounded-2xl border border-line-strong bg-white shadow-pop max-[760px]:mt-10"}>
-          <div className={"flex h-[36px] items-center justify-between border-b border-line bg-chip px-4"}>
-            <div className="flex items-center gap-2">
-              <span className={"size-[9px] rounded-full bg-danger"} />
-              <span className={"size-[9px] rounded-full bg-warn"} />
-              <span className={"size-[9px] rounded-full bg-pass"} />
-              <span className={"ml-3 text-[10px] font-medium text-quiet"}>ProtoPilot — Hardware CAD & Verification</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-[9px] text-body">
-              <span className="size-1.5 rounded-full bg-pass" />
-              <span>Saved Locally</span>
-            </div>
-          </div>
-          <div className={"grid grid-cols-[1fr_1fr_1fr] gap-4 p-5 max-[760px]:grid-cols-1 max-[760px]:gap-3"}>
-            {/* Card 1 */}
-            <div className={"rounded-xl border border-line bg-canvas p-4 text-left"}>
-              <div className={"mb-2 flex items-center gap-2 text-brand-icon"}><Layers3 size={16} /><span className={"text-[11px] font-semibold text-ink-strong"}>Components BOM</span></div>
-              <div className={"space-y-2"}>
-                <div className={"flex items-center gap-2 rounded-lg bg-white p-2 text-[10px] text-body"}><span className={"grid size-5 place-items-center rounded bg-controller-soft text-controller"}><Cpu size={12} /></span>ESP32-WROOM-32</div>
-                <div className={"flex items-center gap-2 rounded-lg bg-white p-2 text-[10px] text-body"}><span className={"grid size-5 place-items-center rounded bg-sensor-soft text-sensor"}><Waves size={12} /></span>Capacitive Soil Sensor</div>
-                <div className={"flex items-center gap-2 rounded-lg bg-white p-2 text-[10px] text-body"}><span className={"grid size-5 place-items-center rounded bg-driver-soft text-driver"}><Zap size={12} /></span>IRLZ44N MOSFET</div>
+        {/* Mini preview mockup (Desktop scaled on mobile, fixed proportions, zero scrolling) */}
+        <div className={"mt-10 sm:mt-14 w-full flex justify-center max-[860px]:h-[210px] max-[760px]:h-[160px] max-[540px]:h-[115px] max-[420px]:h-[100px] overflow-visible"}>
+          <div className={"w-[800px] shrink-0 origin-top transform max-[860px]:scale-[0.85] max-[760px]:scale-[0.62] max-[540px]:scale-[0.45] max-[420px]:scale-[0.38] rounded-2xl border border-line-strong bg-white shadow-pop select-none"}>
+            <div className={"flex h-[36px] items-center justify-between border-b border-line bg-chip px-4"}>
+              <div className="flex items-center gap-2">
+                <span className={"size-[9px] rounded-full bg-danger"} />
+                <span className={"size-[9px] rounded-full bg-warn"} />
+                <span className={"size-[9px] rounded-full bg-pass"} />
+                <span className={"ml-3 text-[10px] font-medium text-quiet"}>ProtoPilot — Hardware CAD & Verification</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[9px] text-body">
+                <span className="size-1.5 rounded-full bg-pass" />
+                <span>Saved Locally</span>
               </div>
             </div>
-            {/* Card 2 */}
-            <div className={"rounded-xl border border-line bg-canvas p-4 text-left"}>
-              <div className={"mb-2 flex items-center gap-2 text-brand-icon"}><Cable size={16} /><span className={"text-[11px] font-semibold text-ink-strong"}>Breadboard & Netlist</span></div>
-              <div className={"flex h-[106px] flex-col items-center justify-center rounded-lg border border-line-soft bg-white text-quiet gap-2"}>
-                <CircuitBoard size={28} className="text-brand-ink" />
-                <span className="text-[10px] font-mono text-quiet">Live SVG Rendering</span>
+            <div className={"grid grid-cols-3 gap-4 p-5"}>
+              {/* Card 1 */}
+              <div className={"rounded-xl border border-line bg-canvas p-4 text-left"}>
+                <div className={"mb-2 flex items-center gap-2 text-brand-icon"}><Layers3 size={16} /><span className={"text-[11px] font-semibold text-ink-strong"}>Components BOM</span></div>
+                <div className={"space-y-2"}>
+                  <div className={"flex items-center gap-2 rounded-lg bg-white p-2 text-[10px] text-body"}><span className={"grid size-5 place-items-center rounded bg-controller-soft text-controller"}><Cpu size={12} /></span>ESP32-WROOM-32</div>
+                  <div className={"flex items-center gap-2 rounded-lg bg-white p-2 text-[10px] text-body"}><span className={"grid size-5 place-items-center rounded bg-sensor-soft text-sensor"}><Waves size={12} /></span>Capacitive Soil Sensor</div>
+                  <div className={"flex items-center gap-2 rounded-lg bg-white p-2 text-[10px] text-body"}><span className={"grid size-5 place-items-center rounded bg-driver-soft text-driver"}><Zap size={12} /></span>IRLZ44N MOSFET</div>
+                </div>
               </div>
-            </div>
-            {/* Card 3 */}
-            <div className={"rounded-xl border border-line bg-canvas p-4 text-left"}>
-              <div className={"mb-2 flex items-center gap-2 text-brand-icon"}><ShieldCheck size={16} /><span className={"text-[11px] font-semibold text-ink-strong"}>Electrical Checks</span></div>
-              <div className={"space-y-2 text-[10px]"}>
-                <div className={"flex items-center gap-2 text-pass"}>✓ <span className="text-body">GPIO voltage within limits</span></div>
-                <div className={"flex items-center gap-2 text-pass"}>✓ <span className="text-body">Flyback clamp diode verified</span></div>
-                <div className={"flex items-center gap-2 text-pass"}>✓ <span className="text-body">Pin net references validated</span></div>
+              {/* Card 2 */}
+              <div className={"rounded-xl border border-line bg-canvas p-4 text-left"}>
+                <div className={"mb-2 flex items-center gap-2 text-brand-icon"}><Cable size={16} /><span className={"text-[11px] font-semibold text-ink-strong"}>Breadboard & Netlist</span></div>
+                <div className={"flex h-[106px] flex-col items-center justify-center rounded-lg border border-line-soft bg-white text-quiet gap-2"}>
+                  <CircuitBoard size={28} className="text-brand-ink" />
+                  <span className="text-[10px] font-mono text-quiet">Live SVG Rendering</span>
+                </div>
+              </div>
+              {/* Card 3 */}
+              <div className={"rounded-xl border border-line bg-canvas p-4 text-left"}>
+                <div className={"mb-2 flex items-center gap-2 text-brand-icon"}><ShieldCheck size={16} /><span className={"text-[11px] font-semibold text-ink-strong"}>Electrical Checks</span></div>
+                <div className={"space-y-2 text-[10px]"}>
+                  <div className={"flex items-center gap-2 text-pass"}>✓ <span className="text-body">GPIO voltage within limits</span></div>
+                  <div className={"flex items-center gap-2 text-pass"}>✓ <span className="text-body">Flyback clamp diode verified</span></div>
+                  <div className={"flex items-center gap-2 text-pass"}>✓ <span className="text-body">Pin net references validated</span></div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </section>
-
-      {/* ── Local-First Highlight Banner ── */}
       <section id="local-first" className={"border-t border-line bg-subtle py-16"}>
         <div className={"mx-auto max-w-[920px] px-6"}>
           <div className="rounded-2xl border border-line-strong bg-white p-8 shadow-panel max-[760px]:p-6">

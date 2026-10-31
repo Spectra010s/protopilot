@@ -437,10 +437,12 @@ export default function WorkbenchPage() {
                   type="button"
                   onClick={() => generateIdea()}
                   disabled={busy || !prompt.trim()}
+                  aria-label="Send to ProtoPilot"
                   className="inline-flex min-h-[36px] items-center justify-center gap-2 rounded-xl bg-brand px-4 text-[12px] font-semibold text-white shadow-button hover:bg-brand-strong disabled:opacity-50 cursor-pointer"
                 >
-                  {busy ? <LoaderCircle className="animate-spin" size={16} /> : <Sparkles size={15} />}
-                  {busy ? "Responding…" : "Send to ProtoPilot"}
+                  {busy && <LoaderCircle className="animate-spin" size={16} />}
+                  <span className="max-[600px]:hidden">{busy ? "Responding…" : "Send to ProtoPilot"}</span>
+                  <span className="hidden max-[600px]:inline">Send</span>
                 </button>
               </div>
             </div>

@@ -4,13 +4,15 @@ Thanks for helping build ProtoPilot. The project is still moving quickly for a h
 
 ## Get started
 
-1. Use Node.js 20 or newer and the pnpm version declared in `package.json`.
+1. Use Node.js 22.13 or newer and the pnpm version declared in `package.json` (currently 11.8.0).
 2. Fork the repository, clone your fork, and create a branch for your change.
-3. Install dependencies with `pnpm install`.
+3. Install dependencies with `pnpm install --frozen-lockfile`.
 4. Copy `.env.example` to `.env.local`. Add a `GEMINI_API_KEY` if you need to exercise AI generation or revision. Never commit the key or put it in a `NEXT_PUBLIC_` variable.
 5. Run `pnpm dev` and open the local URL shown in the terminal.
 
 Browser-saved projects live in IndexedDB on your device. They are not shared with other contributors or stored in the repository.
+
+Read the [documentation index](docs/README.md) for the current architecture and data flow. AI coding contributors should follow [AGENTS.md](AGENTS.md).
 
 ## Pick a contribution
 
@@ -22,7 +24,7 @@ Browser-saved projects live in IndexedDB on your device. They are not shared wit
 ## Work on the code
 
 - Follow the existing TypeScript, React, and Tailwind patterns. The app uses the Next.js App Router. **Before changing Next.js code**, read the relevant guide in the installed `node_modules/next/dist/docs/`; this repository's Next.js version differs from older conventions.
-- Keep the versioned project schema and its derived breadboard, schematic, wiring, firmware, and checks consistent. Changes to a project's meaning should include an appropriate verification path.
+- Keep the versioned project schema and its derived breadboard, schematic, wiring, firmware, and checks consistent. Changes to a project's meaning should include an appropriate verification path. See [Project model](docs/project-model.md).
 - Treat generated circuit details and safety checks as guidance, not as a guarantee that hardware is safe. Do not imply that unverified ratings or wiring are confirmed.
 - Add tests when they verify behavior or guard a regression. Avoid tests that only restate the implementation.
 - Do not commit `.env.local`, API keys, generated build files, or unrelated changes.
