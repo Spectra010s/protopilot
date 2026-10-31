@@ -43,6 +43,7 @@ export async function POST(request: Request) {
                 const next = expandProject(plan, project?.prompt ?? message, projectId);
                 savedProject = { ...next, revision: project ? project.revision + 1 : 0 };
                 send({ type: "project", project: savedProject });
+                send({ type: "artifact", kind: "breadboard", project: savedProject });
                 return { title: savedProject.title, revision: savedProject.revision, components: savedProject.components.length };
               },
             }),
@@ -50,8 +51,9 @@ export async function POST(request: Request) {
               description: "Show the current project's circuit diagram or breadboard view.",
               inputSchema: z.object({}),
               execute: async () => {
-                if (!project && !savedProject) return { available: false, reason: "No design is open." };
-                send({ type: "view", view: "breadboard" });
+                const current = savedProject ?? project;
+                if (!current) return { available: false, reason: "No design is open." };
+                send({ type: "artifact", kind: "breadboard", project: current });
                 return { available: true, view: "circuit diagram" };
               },
             }),
@@ -59,8 +61,9 @@ export async function POST(request: Request) {
               description: "Show the current project's electrical schematic view.",
               inputSchema: z.object({}),
               execute: async () => {
-                if (!project && !savedProject) return { available: false, reason: "No design is open." };
-                send({ type: "view", view: "schematic" });
+                const current = savedProject ?? project;
+                if (!current) return { available: false, reason: "No design is open." };
+                send({ type: "artifact", kind: "schematic", project: current });
                 return { available: true, view: "schematic" };
               },
             }),
@@ -68,8 +71,9 @@ export async function POST(request: Request) {
               description: "Show the current project's generated Arduino firmware code panel.",
               inputSchema: z.object({}),
               execute: async () => {
-                if (!project && !savedProject) return { available: false, reason: "No design is open." };
-                send({ type: "view", view: "code" });
+                const current = savedProject ?? project;
+                if (!current) return { available: false, reason: "No design is open." };
+                send({ type: "artifact", kind: "code", project: current });
                 return { available: true, view: "code" };
               },
             }),

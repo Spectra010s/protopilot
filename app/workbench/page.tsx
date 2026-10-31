@@ -63,12 +63,12 @@ type View = "breadboard" | "schematic";
 export default function WorkbenchPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [sessionId, setSessionId] = useState(() => createId());
+  const [expandedArtifact, setExpandedArtifact] = useState<NonNullable<ProjectConversationMessage["artifact"]> | null>(null);
   const [view, setView] = useState<View>("breadboard");
   const [prompt, setPrompt] = useState("");
   const [activeGeneration, setActiveGeneration] = useState<string | null>(null);
   const [chatReply, setChatReply] = useState<string | null>(null);
   const [revision, setRevision] = useState("");
-  const [pendingGeneration, setPendingGeneration] = useState<{ prompt: string; projectId: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [generationSeconds, setGenerationSeconds] = useState(0);
   const [notice, setNotice] = useState("");
@@ -98,7 +98,7 @@ export default function WorkbenchPage() {
           setProject(saved);
           setNotice(`Restored "${saved.title}"`);
         } else {
-          setNotice("Ready. Describe your idea to start.");
+          setNotice("");
         }
         setStorageReady(true);
       })
@@ -177,9 +177,9 @@ export default function WorkbenchPage() {
     };
   }, [project?.id, storageReady]);
 
-  async function recordMessage(role: ProjectConversationMessage["role"], content: string, projectId: string) {
+  async function recordMessage(role: ProjectConversationMessage["role"], content: string, projectId: string, artifact?: ProjectConversationMessage["artifact"]) {
     try {
-      const message = await addProjectMessage(projectId, role, content);
+      const message = await addProjectMessage(projectId, role, content, artifact);
       setConversations((current) => ({ ...current, [projectId]: [...(current[projectId] ?? []), message] }));
     } catch (error) {
       const message: ProjectConversationMessage = {
@@ -187,6 +187,7 @@ export default function WorkbenchPage() {
         projectId,
         role,
         content,
+        artifact,
         createdAt: Date.now(),
       };
       setConversations((current) => ({ ...current, [projectId]: [...(current[projectId] ?? []), message] }));
@@ -198,7 +199,7 @@ export default function WorkbenchPage() {
     const text = message.trim();
     if (!text || busy) return;
     const projectId = project?.id ?? sessionId;
-    const history = conversation.map(({ role, content }) => ({ role, content }));
+    const history = conversation.filter(({ content }) => content.trim()).map(({ role, content }) => ({ role, content }));
     setActiveGeneration(text);
     setChatReply(null);
     setBusy(true);
@@ -234,7 +235,7 @@ export default function WorkbenchPage() {
         buffer = lines.pop() ?? "";
         for (const line of lines) {
           if (!line.trim()) continue;
-          const event = JSON.parse(line) as { type: string; delta?: string; message?: string; error?: string; project?: unknown; view?: string };
+          const event = JSON.parse(line) as { type: string; delta?: string; message?: string; error?: string; project?: unknown; kind?: "breadboard" | "schematic" | "code" };
           if (event.type === "text" && event.delta) {
             answer += event.delta;
             setChatReply(answer);
@@ -244,13 +245,9 @@ export default function WorkbenchPage() {
             const nextProject = ProjectSchema.parse(event.project);
             setProject(nextProject);
             setNotice(`Updated: ${nextProject.title}`);
-          } else if (event.type === "view") {
-            if (event.view === "breadboard" || event.view === "schematic") {
-              setView(event.view);
-              window.setTimeout(() => document.getElementById("circuit-diagram-container")?.scrollIntoView({ behavior: "smooth" }), 100);
-            } else if (event.view === "code") {
-              window.setTimeout(() => document.getElementById("firmware")?.scrollIntoView({ behavior: "smooth" }), 100);
-            }
+          } else if (event.type === "artifact" && event.kind && event.project) {
+            const artifact = { kind: event.kind, project: ProjectSchema.parse(event.project) };
+            await recordMessage("assistant", "", projectId, artifact);
           } else if (event.type === "error") {
             throw new Error(event.error ?? "ProtoPilot could not respond.");
           }
@@ -281,17 +278,17 @@ export default function WorkbenchPage() {
 
   function startNewProject() {
     setProject(null);
-    setPendingGeneration(null);
+    setSessionId(createId());
     setActiveGeneration(null);
     setChatReply(null);
     setPrompt("");
     setRevision("");
-    setNotice("Canvas cleared. Describe what you'd like to build.");
+    setNotice("");
   }
 
   function resetChat() {
+    setSessionId(createId());
     setActiveGeneration(null);
-    setPendingGeneration(null);
     setChatReply(null);
     setPrompt("");
     setRevision("");
@@ -398,11 +395,6 @@ export default function WorkbenchPage() {
         </button>
       </header>
 
-      {notice && (
-        <p role="status" aria-live="polite" className="mx-auto mt-3 max-w-[960px] px-6 text-xs text-body">
-          {notice}
-        </p>
-      )}
 
       {/* ── Main Workspace ── */}
       {!project ? (
@@ -416,7 +408,7 @@ export default function WorkbenchPage() {
             Enter what you want to build. ProtoPilot will choose microcontroller pins, build stages, generate wiring netlists, Arduino code, and verify safety checks.
           </p>
 
-          {!activeGeneration && !busy && !pendingGeneration && conversation.length === 0 ? (
+          {!activeGeneration && !busy && conversation.length === 0 ? (
             /* Initial Prompt Form before chat starts */
             <div className="mt-8 w-full max-w-[620px] rounded-2xl border border-line-strong bg-white p-5 shadow-panel text-left">
               <label className="text-xs font-semibold text-ink-strong flex items-center gap-2 mb-2" htmlFor="initial-prompt">
@@ -440,7 +432,7 @@ export default function WorkbenchPage() {
                   className="inline-flex min-h-[36px] items-center justify-center gap-2 rounded-xl bg-brand px-4 text-[12px] font-semibold text-white shadow-button hover:bg-brand-strong disabled:opacity-50 cursor-pointer"
                 >
                   {busy ? <LoaderCircle className="animate-spin" size={16} /> : <Sparkles size={15} />}
-                  {busy ? "Generating design…" : "Generate Hardware Design"}
+                  {busy ? "Responding…" : "Send to ProtoPilot"}
                 </button>
               </div>
             </div>
@@ -457,7 +449,7 @@ export default function WorkbenchPage() {
                     <h3 className="text-xs font-semibold text-ink-strong">Hardware Design Assistant</h3>
                     <p className="text-[10px] text-faint flex items-center gap-1.5">
                       <span className={cn("inline-block size-1.5 rounded-full", busy ? "bg-amber-500 animate-pulse" : "bg-pass")} />
-                      {busy ? `Gemma 4 is designing… (${generationSeconds}s)` : "Gemma 4 · Online"}
+                      {busy ? `Gemma 4 is responding… (${generationSeconds}s)` : "Gemma 4 · Online"}
                     </p>
                   </div>
                 </div>
@@ -493,7 +485,8 @@ export default function WorkbenchPage() {
                             : "rounded-tl-sm border border-line-soft bg-subtle text-ink-strong shadow-xs"
                         )}
                       >
-                        <p className="whitespace-pre-line">{msg.content}</p>
+                        {msg.content && <p className="whitespace-pre-line">{msg.content}</p>}
+                        {msg.artifact && <ChatArtifact artifact={msg.artifact} onExpand={() => setExpandedArtifact(msg.artifact ?? null)} />}
                         <span className={cn("block mt-1 text-[9px]", msg.role === "user" ? "text-white/70 text-right" : "text-faint")}>
                           {new Date(msg.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                         </span>
@@ -518,7 +511,7 @@ export default function WorkbenchPage() {
                     <div className="rounded-2xl rounded-tl-sm border border-line-soft bg-subtle px-4 py-3 text-xs text-ink-strong max-w-[85%] shadow-xs space-y-2">
                       <div className="flex items-center gap-2 font-medium text-brand">
                         <LoaderCircle className="animate-spin" size={14} />
-                        <span>Gemma 4 is designing your circuit… ({generationSeconds}s)</span>
+                        <span>Gemma 4 is responding… ({generationSeconds}s)</span>
                       </div>
                       {notice && <p className="text-[11px] text-body">{notice}</p>}
                       <button
@@ -528,19 +521,6 @@ export default function WorkbenchPage() {
                       >
                         Cancel request
                       </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Clarification prompt if pending */}
-                {pendingGeneration && (
-                  <div className="flex items-start gap-2.5">
-                    <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand mt-0.5">
-                      <Bot size={15} />
-                    </div>
-                    <div className="rounded-2xl rounded-tl-sm border border-line-soft bg-subtle px-4 py-3 text-xs text-ink-strong max-w-[85%] shadow-xs space-y-1.5">
-                      <p className="font-semibold text-ink-strong">Answer Gemma’s questions</p>
-                      <p className="whitespace-pre-line text-body">{conversation.at(-1)?.content}</p>
                     </div>
                   </div>
                 )}
@@ -562,32 +542,25 @@ export default function WorkbenchPage() {
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
-                    if (pendingGeneration) {
-                      void reviseProject();
-                    } else if (prompt.trim()) {
-                      void generateIdea(prompt);
-                    }
+                    if (prompt.trim()) void generateIdea(prompt);
                   }}
                   className="flex gap-2"
                 >
                   <label className="sr-only" htmlFor="chat-reply-input">
-                    {pendingGeneration ? "Your answers" : "Your message"}
+                    Your message
                   </label>
                   <textarea
                     id="chat-reply-input"
                     rows={2}
-                    value={pendingGeneration ? revision : prompt}
-                    onChange={(e) => {
-                      if (pendingGeneration) setRevision(e.target.value);
-                      else setPrompt(e.target.value);
-                    }}
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
                     disabled={busy}
-                    placeholder={pendingGeneration ? "Answer Gemma’s questions to continue…" : "Type your design prompt or request…"}
+                    placeholder="Ask ProtoPilot anything about your design…"
                     className="w-full resize-none rounded-xl border border-line-strong bg-inset p-3 text-xs text-ink outline-none focus:border-brand focus:shadow-focus"
                   />
                   <button
                     type="submit"
-                    disabled={busy || (pendingGeneration ? !revision.trim() : !prompt.trim())}
+                    disabled={busy || !prompt.trim()}
                     className="self-end inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand px-4 text-xs font-semibold text-white shadow-button hover:bg-brand-strong disabled:opacity-50 cursor-pointer shrink-0"
                   >
                     {busy ? <LoaderCircle className="animate-spin" size={14} /> : <Send size={13} />}
@@ -599,7 +572,7 @@ export default function WorkbenchPage() {
           )}
 
           {/* 4 Separate Standalone Starter Cards Underneath (ONLY shown before chat starts) */}
-          {!activeGeneration && !busy && !pendingGeneration && conversation.length === 0 && (
+          {!activeGeneration && !busy && conversation.length === 0 && (
             <div className="mt-8 w-full max-w-[620px]">
               <p className="text-[11px] font-semibold tracking-wider text-faint uppercase mb-3 text-left">
                 Or pick an idea to start:
@@ -990,7 +963,8 @@ export default function WorkbenchPage() {
                       )}
                       key={message.id}
                     >
-                      <p>{message.content}</p>
+                      {message.content && <p>{message.content}</p>}
+                      {message.artifact && <ChatArtifact artifact={message.artifact} onExpand={() => setExpandedArtifact(message.artifact ?? null)} />}
                       <span>{message.role === "user" ? "You" : "Assistant"} · {new Date(message.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
                     </div>
                   ))
@@ -1013,13 +987,13 @@ export default function WorkbenchPage() {
                 }}
               >
                 <label className="sr-only" htmlFor="revision-request">
-                  {pendingGeneration ? "Answer clarification questions" : "Ask for a design change"}
+                  Ask ProtoPilot
                 </label>
                 <textarea
                   className={"w-full min-h-12 resize-none rounded-lg border-0 bg-transparent p-[5px] text-[10px] leading-[1.5] text-ink-strong outline-none placeholder:text-faint"}
                   id="revision-request"
                   rows={2}
-                  placeholder={pendingGeneration ? "Answer Gemma’s questions…" : "Ask for a change or explanation…"}
+                  placeholder="Ask for a change, a view, or an explanation…"
                   value={revision}
                   onChange={(event) => setRevision(event.target.value)}
                 />
@@ -1130,6 +1104,44 @@ export default function WorkbenchPage() {
           </SheetFooter>
         </SheetContent>
       </Sheet>
+      {expandedArtifact && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3" role="dialog" aria-modal="true" aria-label="Expanded design result" onClick={() => setExpandedArtifact(null)}>
+          <div className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-line px-4 py-3">
+              <strong className="text-sm text-ink-strong">{expandedArtifact.kind === "code" ? expandedArtifact.project.firmware.filename : expandedArtifact.kind === "schematic" ? "Schematic" : "Circuit diagram"}</strong>
+              <button type="button" className="rounded-lg p-2 text-body hover:bg-subtle" onClick={() => setExpandedArtifact(null)} aria-label="Close expanded view"><X size={18} /></button>
+            </div>
+            <div className="overflow-auto p-3">
+              {expandedArtifact.kind === "code" ? (
+                <pre className="overflow-auto rounded-lg bg-slate-950 p-5 text-xs leading-relaxed text-slate-100"><code>{expandedArtifact.project.firmware.source}</code></pre>
+              ) : expandedArtifact.kind === "schematic" ? (
+                <SchematicView project={expandedArtifact.project} />
+              ) : (
+                <BreadboardView project={expandedArtifact.project} />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChatArtifact({ artifact, onExpand }: { artifact: NonNullable<ProjectConversationMessage["artifact"]>; onExpand: () => void }) {
+  const label = artifact.kind === "code" ? artifact.project.firmware.filename : artifact.kind === "schematic" ? "Schematic" : "Circuit diagram";
+  return (
+    <div className="mt-2 min-w-0 overflow-hidden rounded-xl border border-line bg-white text-left">
+      <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
+        <strong className="truncate text-[11px] font-semibold text-ink-strong">{label}</strong>
+        <button type="button" onClick={onExpand} className="shrink-0 rounded-md border border-line px-2 py-1 text-[10px] font-medium text-brand hover:bg-brand-soft">Expand</button>
+      </div>
+      {artifact.kind === "code" ? (
+        <pre className="max-h-48 overflow-auto bg-slate-950 p-3 text-[10px] leading-relaxed text-slate-100"><code>{artifact.project.firmware.source}</code></pre>
+      ) : (
+        <button type="button" onClick={onExpand} className="block h-44 w-full overflow-hidden bg-canvas text-left" aria-label={`Expand ${label}`}>
+          {artifact.kind === "schematic" ? <SchematicView project={artifact.project} /> : <BreadboardView project={artifact.project} />}
+        </button>
+      )}
     </div>
   );
 }

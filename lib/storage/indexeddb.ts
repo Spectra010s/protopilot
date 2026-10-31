@@ -13,6 +13,7 @@ export type ProjectConversationMessage = {
   projectId: string;
   role: "user" | "assistant";
   content: string;
+  artifact?: { kind: "breadboard" | "schematic" | "code"; project: Project };
   createdAt: number;
 };
 export type ProjectImageAsset = {
@@ -132,6 +133,7 @@ export async function getMostRecentProjectDraft(): Promise<Project | null> {
 const ConversationMessageSchema = z.object({
   id: z.string().min(1), projectId: z.string().min(1),
   role: z.enum(["user", "assistant"]), content: z.string(), createdAt: z.number(),
+  artifact: z.object({ kind: z.enum(["breadboard", "schematic", "code"]), project: ProjectSchema }).optional(),
 });
 
 export async function listProjectMessages(projectId: string): Promise<ProjectConversationMessage[]> {
@@ -148,8 +150,9 @@ export async function addProjectMessage(
   projectId: string,
   role: ProjectConversationMessage["role"],
   content: string,
+  artifact?: ProjectConversationMessage["artifact"],
 ): Promise<ProjectConversationMessage> {
-  const message = ConversationMessageSchema.parse({ id: createId(), projectId, role, content, createdAt: Date.now() });
+  const message = ConversationMessageSchema.parse({ id: createId(), projectId, role, content, artifact, createdAt: Date.now() });
   const database = await getDatabase();
   await database.put("messages", message);
   return message;
