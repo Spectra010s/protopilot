@@ -64,7 +64,7 @@ type View = "breadboard" | "schematic";
 
 export default function WorkbenchPage() {
   const [project, setProject] = useState<Project | null>(null);
-  const [sessionId, setSessionId] = useState(() => createId());
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [expandedArtifact, setExpandedArtifact] = useState<NonNullable<ProjectConversationMessage["artifact"]> | null>(null);
   const [view, setView] = useState<View>("breadboard");
   const [prompt, setPrompt] = useState("");
@@ -85,7 +85,7 @@ export default function WorkbenchPage() {
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const generationControllerRef = useRef<AbortController | null>(null);
 
-  const conversation = conversations[project?.id ?? sessionId] ?? [];
+  const conversation = conversations[project?.id ?? sessionId ?? ""] ?? [];
   const checks = useMemo(() => (project ? validateElectrical(project) : []), [project]);
   const wiring = useMemo(() => (project ? deriveWiringTable(project) : []), [project]);
   const failCount = checks.filter((item) => item.status === "fail").length;
@@ -205,7 +205,8 @@ export default function WorkbenchPage() {
   async function sendMessage(message: string) {
     const text = message.trim();
     if (!text || busy) return;
-    const projectId = project?.id ?? sessionId;
+    const projectId = project?.id ?? sessionId ?? createId();
+    if (!project && !sessionId) setSessionId(projectId);
     const history = conversation.filter(({ content }) => content.trim()).map(({ role, content }) => ({ role, content }));
     setActiveGeneration(text);
     setChatReply(null);
