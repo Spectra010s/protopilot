@@ -33,7 +33,14 @@ export async function POST(request: Request) {
         ];
         const result = streamText({
           model,
-          instructions: `You are ProtoPilot, an electronics design assistant. Talk naturally with the user and remember the conversation. Answer questions directly. Use saveDesign only when the user asks you to build or change the circuit design; it updates components, wiring, schematic data, and Arduino firmware. Use showCircuitDiagram, showSchematic, or showCode when the user asks to see that view. Questions and conversation need no tool. If a design is already open, preserve useful parts when changing it. Never drive a motor or pump directly from GPIO; use an appropriate driver and flyback protection, and mark unknown electrical ratings as unknown. After using a tool, briefly tell the user what you did.\nCURRENT DESIGN:\n${project ? JSON.stringify(project) : "No design is open."}`,
+          instructions: `You are ProtoPilot, an AI electronics and hardware design assistant. Talk naturally, concisely, and directly with the user.
+Use tools to generate and show hardware designs:
+- When the user asks to design, build, or modify a hardware circuit: call saveDesign. It generates components, schematic connections, build steps, and Arduino firmware.
+- When the user asks for code, firmware, or to write/modify the Arduino program: call showCode (if a design is open) or generateCode.
+- When the user asks to see the circuit diagram, picture, or breadboard: call showCircuitDiagram.
+- When the user asks to see the electrical schematic: call showSchematic.
+- When the user asks general questions or discusses electronics: answer directly in markdown without calling tools.
+Never drive an inductive load (motor, solenoid, relay, pump) directly from a GPIO pin; always require a MOSFET/transistor driver and flyback diode. Always provide a clear, helpful explanation of your decisions in your reply.\nCURRENT DESIGN:\n${project ? JSON.stringify(project) : "No design is open."}`,
           messages,
           tools: {
             saveDesign: tool({
@@ -43,8 +50,45 @@ export async function POST(request: Request) {
                 const next = expandProject(plan, project?.prompt ?? message, projectId);
                 savedProject = { ...next, revision: project ? project.revision + 1 : 0 };
                 send({ type: "project", project: savedProject });
-                send({ type: "artifact", kind: "breadboard", project: savedProject });
+
+                const askedForCode = /\b(code|firmware|sketch|c\+\+|program|arduino|software)\b/i.test(message);
+                const askedForCircuit = /\b(circuit|diagram|breadboard|schematic|wire|wiring|visual|picture|image|look like)\b/i.test(message);
+
+                if (askedForCode && !askedForCircuit) {
+                  send({ type: "artifact", kind: "code", project: savedProject });
+                } else if (askedForCircuit && !askedForCode) {
+                  send({ type: "artifact", kind: "breadboard", project: savedProject });
+                } else {
+                  send({ type: "artifact", kind: "breadboard", project: savedProject });
+                  send({ type: "artifact", kind: "code", project: savedProject });
+                }
                 return { title: savedProject.title, revision: savedProject.revision, components: savedProject.components.length };
+              },
+            }),
+            generateCode: tool({
+              description: "Generate or revise Arduino C++ firmware code for the circuit design.",
+              inputSchema: z.object({
+                code: z.string().describe("Complete Arduino C++ source code with setup(), loop(), and comments."),
+                filename: z.string().optional().describe("Filename e.g. main.ino"),
+                board: z.string().optional().describe("Target board e.g. ESP32, Arduino Uno, Raspberry Pi Pico"),
+              }),
+              execute: async ({ code, filename, board }) => {
+                const current = savedProject ?? project;
+                if (!current) return { available: false, reason: "No design is open. Create a circuit design first." };
+                const updated: Project = {
+                  ...current,
+                  revision: current.revision + 1,
+                  firmware: {
+                    ...current.firmware,
+                    filename: filename ? (filename.endsWith(".ino") || filename.endsWith(".cpp") ? filename : `${filename}.ino`) : current.firmware.filename,
+                    board: board ?? current.firmware.board,
+                    source: code,
+                  },
+                };
+                savedProject = updated;
+                send({ type: "project", project: updated });
+                send({ type: "artifact", kind: "code", project: updated });
+                return { success: true, filename: updated.firmware.filename, lines: code.split("\n").length };
               },
             }),
             showCircuitDiagram: tool({
