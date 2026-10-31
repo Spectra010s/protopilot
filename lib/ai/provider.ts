@@ -1,5 +1,5 @@
 import { createGoogle } from "@ai-sdk/google";
-import { generateText, Output } from "ai";
+import { generateText, streamText, Output } from "ai";
 import { z } from "zod";
 import { ProjectSchema, type Project } from "@/lib/project/schema";
 
@@ -20,6 +20,7 @@ export const AiRequest = { generation: GenerationRequestSchema, revision: Revisi
 
 export interface ProjectProvider {
   generate(request: GenerateRequest): Promise<GenerateResult>;
+  streamGenerate(request: GenerateRequest): ReturnType<GemmaProvider["streamGenerate"]>;
   revise(request: RevisionRequest): Promise<RevisionResult>;
 }
 
@@ -46,16 +47,25 @@ class GemmaProvider implements ProjectProvider {
   }
 
   async generate(request: GenerateRequest): Promise<GenerateResult> {
-    const output = await this.askObject(DESIGN_INSTRUCTIONS, `Return an object with "project" (a complete project matching the schema, or null only if a safe design cannot be selected) and "questions" (up to two short questions).
+    const output = await this.askObject(DESIGN_INSTRUCTIONS, `Always generate and return a complete "project" matching the schema. For any unstated voltages or part ratings, use standard assumptions (e.g. 5V supply, 3.3V logic) with status "assumed" or "unknown", and list them in the "assumptions" array. Only set "project" to null if the request is completely incomprehensible or non-hardware. "questions" can contain optional clarification questions or be empty.
 USER REQUEST:
 ${request.prompt}
 
 OPTIONAL CONSTRAINTS:
-${JSON.stringify(request.constraints ?? {})}
-
-EXAMPLE:
-{"project":null,"questions":["What voltage and startup current are printed on the pump label?"]}`, GenerationOutputSchema);
+${JSON.stringify(request.constraints ?? {})}`, GenerationOutputSchema);
     return { ...output, project: output.project && request.projectId ? { ...output.project, id: request.projectId } : output.project };
+  }
+
+  streamGenerate(request: GenerateRequest) {
+    return streamText({
+      model: this.model,
+      instructions: DESIGN_INSTRUCTIONS,
+      prompt: `Generate a complete project matching the schema for this request. Keep descriptions and firmware concise. Use unknown ratings when exact parts are not supplied. Return questions only if the request is impossible to design safely.\nUSER REQUEST:\n${request.prompt}\nOPTIONAL CONSTRAINTS:\n${JSON.stringify(request.constraints ?? {})}`,
+      output: Output.object({ schema: GenerationOutputSchema }),
+      temperature: 0.2,
+      maxOutputTokens: 8192,
+      providerOptions: { google: { thinkingConfig: { thinkingLevel: "minimal" } } },
+    });
   }
 
   async revise({ project, request }: RevisionRequest): Promise<RevisionResult> {

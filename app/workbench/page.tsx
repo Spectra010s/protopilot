@@ -28,16 +28,15 @@ import {
   Waves,
   Cable,
   Cpu,
-  Menu,
   X,
   FileSpreadsheet,
-  ArrowLeft,
   Zap,
 } from "lucide-react";
 import { BreadboardView } from "@/components/breadboard-view";
 import { SchematicView } from "@/components/schematic-view";
 import { deriveWiringTable, validateElectrical } from "@/lib/project/derive";
 import { ProjectSchema, type Project } from "@/lib/project/schema";
+import { createId } from "@/lib/id";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Sheet,
@@ -65,20 +64,21 @@ export default function WorkbenchPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [view, setView] = useState<View>("breadboard");
   const [prompt, setPrompt] = useState("");
+  const [activeGeneration, setActiveGeneration] = useState<string | null>(null);
   const [revision, setRevision] = useState("");
   const [pendingGeneration, setPendingGeneration] = useState<{ prompt: string; projectId: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [generationSeconds, setGenerationSeconds] = useState(0);
   const [notice, setNotice] = useState("");
   const [copied, setCopied] = useState(false);
-  const [mobileMenu, setMobileMenu] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
   const [conversations, setConversations] = useState<Record<string, ProjectConversationMessage[]>>({});
   const [projectDrafts, setProjectDrafts] = useState<ProjectDraftSummary[]>([]);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [showAllSteps, setShowAllSteps] = useState(false);
 
-  const libraryTriggerRef = useRef<HTMLButtonElement | null>(null);
   const diagramContainerRef = useRef<HTMLDivElement | null>(null);
+  const generationControllerRef = useRef<AbortController | null>(null);
 
   const conversation = conversations[pendingGeneration?.projectId ?? project?.id ?? ""] ?? [];
   const checks = useMemo(() => (project ? validateElectrical(project) : []), [project]);
@@ -181,7 +181,7 @@ export default function WorkbenchPage() {
       setConversations((current) => ({ ...current, [projectId]: [...(current[projectId] ?? []), message] }));
     } catch (error) {
       const message: ProjectConversationMessage = {
-        id: crypto.randomUUID(),
+        id: createId(),
         projectId,
         role,
         content,
@@ -196,17 +196,46 @@ export default function WorkbenchPage() {
     const textToGenerate = (customPrompt ?? prompt).trim();
     if (!textToGenerate) return;
     const initialPrompt = textToGenerate;
-    const projectId = crypto.randomUUID();
+    const projectId = createId();
+    setActiveGeneration(initialPrompt);
     setBusy(true);
-    setNotice("Gemma 4 is designing circuit, pins, and checks...");
+    setGenerationSeconds(0);
+    setNotice("Request sent to Gemma 4. Designing your circuit...");
+    const controller = new AbortController();
+    generationControllerRef.current = controller;
+    const timeout = window.setTimeout(() => controller.abort("timeout"), 180_000);
+    const ticker = window.setInterval(() => setGenerationSeconds((seconds) => seconds + 1), 1000);
     try {
       const response = await fetch("/api/projects/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: initialPrompt, projectId }),
+        signal: controller.signal,
       });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? "Generation failed");
+      if (!response.ok) {
+        const errorBody = await response.json();
+        throw new Error(errorBody.error ?? "Generation failed");
+      }
+      if (!response.body) throw new Error("Generation stream is unavailable.");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let body: { project: unknown; questions: string[] } | null = null;
+      while (true) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value, { stream: !done });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const event = JSON.parse(line) as { type: string; message?: string; error?: string; project?: unknown; questions?: string[] };
+          if (event.type === "status" && event.message) setNotice(event.message);
+          if (event.type === "error") throw new Error(event.error ?? "Generation failed");
+          if (event.type === "result") body = { project: event.project, questions: event.questions ?? [] };
+        }
+        if (done) break;
+      }
+      if (!body) throw new Error("Gemma ended without a project response.");
       await recordMessage("user", initialPrompt, projectId);
       if (body.project) {
         const nextProject = ProjectSchema.parse(body.project);
@@ -237,8 +266,11 @@ export default function WorkbenchPage() {
       }
       setPrompt("");
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Could not generate design");
+      setNotice(controller.signal.aborted ? controller.signal.reason === "cancelled" ? "Generation cancelled. You can try another prompt." : "Gemma took over 3 minutes. Please try again." : error instanceof Error ? error.message : "Could not generate design");
     } finally {
+      window.clearTimeout(timeout);
+      window.clearInterval(ticker);
+      generationControllerRef.current = null;
       setBusy(false);
     }
   }
@@ -303,6 +335,7 @@ export default function WorkbenchPage() {
   function startNewProject() {
     setProject(null);
     setPendingGeneration(null);
+    setActiveGeneration(null);
     setPrompt("");
     setRevision("");
     setNotice("Canvas cleared. Describe what you'd like to build.");
@@ -375,13 +408,9 @@ export default function WorkbenchPage() {
           </Link>
         </div>
 
-        <nav className={cn(
-          "flex h-full items-center gap-[20px] max-[760px]:absolute max-[760px]:left-0 max-[760px]:right-0 max-[760px]:top-[55px] max-[760px]:z-10 max-[760px]:h-auto max-[760px]:border-b max-[760px]:border-line max-[760px]:bg-white max-[760px]:px-4 max-[760px]:py-2",
-          mobileMenu ? "max-[760px]:flex" : "max-[760px]:hidden"
-        )}>
+        <nav className="flex h-full items-center gap-[20px] max-[760px]:hidden">
           <button
             type="button"
-            ref={libraryTriggerRef}
             onClick={() => setLibraryOpen(true)}
             className="flex items-center gap-1.5 text-xs font-medium text-body hover:text-brand bg-transparent border-0 cursor-pointer p-0"
           >
@@ -402,24 +431,14 @@ export default function WorkbenchPage() {
           )}
         </nav>
 
-        {/* Header Right */}
-        <div className={"ml-auto flex items-center gap-3.5"}>
-          <Link
-            href="/"
-            className="flex items-center gap-1 text-[11px] text-quiet hover:text-brand no-underline"
-            title="Return to Home"
-          >
-            <ArrowLeft size={13} />
-            <span className="max-[430px]:hidden">Home</span>
-          </Link>
-        </div>
-
         <button
-          className={"hidden border-0 bg-transparent text-ink-soft max-[760px]:grid max-[760px]:size-[30px] max-[760px]:place-items-center"}
-          onClick={() => setMobileMenu(!mobileMenu)}
-          aria-label="Toggle menu"
+          type="button"
+          className="ml-auto hidden size-9 place-items-center rounded-lg border-0 bg-transparent text-brand max-[760px]:grid"
+          onClick={() => setLibraryOpen(true)}
+          aria-label="My Projects"
+          title="My Projects"
         >
-          {mobileMenu ? <X /> : <Menu />}
+          <Database size={20} />
         </button>
       </header>
 
@@ -463,9 +482,17 @@ export default function WorkbenchPage() {
                 className="inline-flex min-h-[36px] items-center justify-center gap-2 rounded-xl bg-brand px-4 text-[12px] font-semibold text-white shadow-button hover:bg-brand-strong disabled:opacity-50 cursor-pointer"
               >
                 {busy ? <LoaderCircle className="animate-spin" size={16} /> : <Sparkles size={15} />}
-                Generate Hardware Design
+                {busy ? "Generating design…" : "Generate Hardware Design"}
               </button>
             </div>
+            {activeGeneration && (
+              <div className="mt-5 border-t border-line pt-5" aria-live="polite">
+                <p className="text-[10px] font-semibold text-quiet">You sent</p>
+                <p className="mt-1 rounded-xl bg-brand-soft p-3 text-xs text-ink-strong">{activeGeneration}</p>
+                <p className="mt-2 text-xs text-body">{busy ? `Gemma 4 is working on your design… ${generationSeconds}s` : notice}</p>
+                {busy && <button type="button" className="mt-2 text-xs font-semibold text-brand" onClick={() => generationControllerRef.current?.abort("cancelled")}>Cancel request</button>}
+              </div>
+            )}
             {pendingGeneration && (
               <div className="mt-5 border-t border-line pt-5">
                 <p className="mb-2 text-xs font-semibold text-ink-strong">Answer Gemma’s questions</p>
@@ -548,7 +575,7 @@ export default function WorkbenchPage() {
           <aside className={"flex min-w-0 flex-col gap-[14px] max-[760px]:w-full max-[760px]:gap-3 max-[760px]:order-2"}>
             <div className={"flex items-center justify-between text-[10px] text-faint"}>
               <div className="flex items-center gap-1.5">
-                <button ref={libraryTriggerRef} className={"p-0 text-inherit hover:text-brand hover:underline cursor-pointer border-0 bg-transparent"} type="button" onClick={() => setLibraryOpen(true)}>
+                <button className={"p-0 text-inherit hover:text-brand hover:underline cursor-pointer border-0 bg-transparent"} type="button" onClick={() => setLibraryOpen(true)}>
                   My projects
                 </button>
                 <span>/</span>
@@ -599,7 +626,7 @@ export default function WorkbenchPage() {
                   onClick={() => generateIdea()}
                   disabled={busy || !prompt.trim()}
                 >
-                  {busy ? <LoaderCircle className="animate-spin" size={14} /> : <Sparkles size={13} />} Generate
+                  {busy ? <LoaderCircle className="animate-spin" size={14} /> : <Sparkles size={13} />} {busy ? "Generating…" : "Generate"}
                 </button>
               </div>
             </section>

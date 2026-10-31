@@ -1,6 +1,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { z } from "zod";
 import { ProjectSchema, type Project } from "@/lib/project/schema";
+import { createId } from "@/lib/id";
 
 const DB_NAME = "protopilot.v1";
 const DB_VERSION = 1;
@@ -148,7 +149,7 @@ export async function addProjectMessage(
   role: ProjectConversationMessage["role"],
   content: string,
 ): Promise<ProjectConversationMessage> {
-  const message = ConversationMessageSchema.parse({ id: crypto.randomUUID(), projectId, role, content, createdAt: Date.now() });
+  const message = ConversationMessageSchema.parse({ id: createId(), projectId, role, content, createdAt: Date.now() });
   const database = await getDatabase();
   await database.put("messages", message);
   return message;
@@ -157,7 +158,7 @@ export async function addProjectMessage(
 export async function saveProjectImage(projectId: string, blob: Blob, name: string): Promise<ProjectImageAsset> {
   if (!blob.type.startsWith("image/")) throw new Error("Only image files can be stored as project assets.");
   const asset: StoredImage = {
-    id: crypto.randomUUID(), projectId, name: name.trim() || "image",
+    id: createId(), projectId, name: name.trim() || "image",
     mimeType: blob.type, size: blob.size, createdAt: Date.now(), blob,
   };
   const database = await getDatabase();
