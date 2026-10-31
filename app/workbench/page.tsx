@@ -85,6 +85,7 @@ export default function WorkbenchPage() {
   const diagramContainerRef = useRef<HTMLDivElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const generationControllerRef = useRef<AbortController | null>(null);
+  const sendingRef = useRef(false);
 
   const conversation = conversations[project?.id ?? sessionId ?? ""] ?? [];
   const checks = useMemo(() => (project ? validateElectrical(project) : []), [project]);
@@ -217,7 +218,8 @@ export default function WorkbenchPage() {
 
   async function sendMessage(message: string) {
     const text = message.trim();
-    if (!text || busy) return;
+    if (!text || busy || sendingRef.current) return;
+    sendingRef.current = true;
     const projectId = project?.id ?? sessionId ?? createId();
     if (!project && !sessionId) setSessionId(projectId);
     const history = conversation.filter(({ content }) => content.trim()).map(({ role, content }) => ({ role, content }));
@@ -285,6 +287,7 @@ export default function WorkbenchPage() {
       window.clearTimeout(timeout);
       window.clearInterval(ticker);
       generationControllerRef.current = null;
+      sendingRef.current = false;
       setBusy(false);
     }
   }
@@ -505,8 +508,7 @@ export default function WorkbenchPage() {
                     type="button"
                     disabled={busy}
                     onClick={() => {
-                      setPrompt(item.prompt);
-                      generateIdea(item.prompt);
+                      void generateIdea(item.prompt);
                     }}
                     className="flex flex-col text-left rounded-xl border border-line bg-white p-4 shadow-panel hover:border-brand hover:shadow-focus transition cursor-pointer group disabled:opacity-50"
                   >
