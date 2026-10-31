@@ -160,22 +160,33 @@ export default function WorkbenchPage() {
   async function openSavedProject(id: string) {
     try {
       const saved = await getProjectDraft(id);
-      if (!saved) throw new Error("This saved project is unavailable.");
-      setProject(saved);
+      if (saved) {
+        setProject(saved);
+        setSessionId(saved.id);
+        setNotice(`Opened: ${saved.title}`);
+      } else {
+        setProject(null);
+        setSessionId(id);
+        setNotice("Opened design conversation");
+      }
+      setActiveGeneration(null);
+      setChatReply(null);
       setLibraryOpen(false);
-      setNotice(`Opened: ${saved.title}`);
+      const messages = await listProjectMessages(id);
+      setConversations((current) => ({ ...current, [id]: messages }));
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not open project");
     }
   }
 
-  // Load conversation messages for the current project
+  // Load conversation messages for the current project or active session
   useEffect(() => {
-    if (!storageReady || !project?.id) return;
+    const activeId = project?.id ?? sessionId;
+    if (!storageReady || !activeId) return;
     let active = true;
-    void listProjectMessages(project.id)
+    void listProjectMessages(activeId)
       .then((messages) => {
-        if (active) setConversations((current) => ({ ...current, [project.id]: messages }));
+        if (active) setConversations((current) => ({ ...current, [activeId]: messages }));
       })
       .catch((error: unknown) => {
         if (active) setNotice(error instanceof Error ? `Could not load messages: ${error.message}` : "Could not load conversation");
@@ -183,12 +194,13 @@ export default function WorkbenchPage() {
     return () => {
       active = false;
     };
-  }, [project?.id, storageReady]);
+  }, [project?.id, sessionId, storageReady]);
 
   async function recordMessage(role: ProjectConversationMessage["role"], content: string, projectId: string, artifact?: ProjectConversationMessage["artifact"]) {
     try {
       const message = await addProjectMessage(projectId, role, content, artifact);
       setConversations((current) => ({ ...current, [projectId]: [...(current[projectId] ?? []), message] }));
+      void listProjectDrafts().then((drafts) => setProjectDrafts(drafts)).catch(() => undefined);
     } catch (error) {
       const message: ProjectConversationMessage = {
         id: createId(),
@@ -573,12 +585,11 @@ export default function WorkbenchPage() {
                   <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand mt-0.5">
                     <Bot size={15} />
                   </div>
-                  <div className="py-1 text-xs text-ink-strong max-w-[85%] space-y-1">
+                  <div className="py-1 text-xs text-ink-strong max-w-[85%]">
                     <div className="flex items-center gap-2 font-medium text-brand">
                       <LoaderCircle className="animate-spin" size={14} />
-                      <span>ProtoPilot is responding…</span>
+                      <span>{notice && notice !== "ProtoPilot is responding…" ? notice : "ProtoPilot is responding…"}</span>
                     </div>
-                    {notice && <p className="text-[11px] text-body">{notice}</p>}
                   </div>
                 </div>
               )}

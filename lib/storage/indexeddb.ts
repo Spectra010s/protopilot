@@ -81,10 +81,21 @@ export async function saveProjectDraft(project: Project): Promise<void> {
   await database.put("projects", { id: project.id, title: project.title, updatedAt: Date.now(), project });
 }
 
+export async function touchProjectSession(id: string, title: string, project?: Project | null): Promise<void> {
+  const database = await getDatabase();
+  const existing = await database.get("projects", id);
+  await database.put("projects", {
+    id,
+    title: project?.title ?? existing?.title ?? title ?? "New Hardware Design",
+    updatedAt: Date.now(),
+    project: project ?? existing?.project ?? null,
+  });
+}
+
 export async function getProjectDraft(id: string): Promise<Project | null> {
   const database = await getDatabase();
   const stored = await database.get("projects", id);
-  const parsed = stored ? ProjectSchema.safeParse(stored.project) : null;
+  const parsed = stored && stored.project ? ProjectSchema.safeParse(stored.project) : null;
   return parsed?.success ? parsed.data : null;
 }
 
@@ -92,8 +103,14 @@ export async function listProjectDrafts(): Promise<ProjectDraftSummary[]> {
   const database = await getDatabase();
   const rows = await database.getAll("projects");
   return rows.flatMap((row) => {
-    const parsed = ProjectSchema.safeParse(row.project);
-    return parsed.success ? [{ id: parsed.data.id, title: parsed.data.title, updatedAt: row.updatedAt }] : [];
+    if (row.project) {
+      const parsed = ProjectSchema.safeParse(row.project);
+      if (parsed.success) return [{ id: parsed.data.id, title: parsed.data.title, updatedAt: row.updatedAt }];
+    }
+    if (row.title) {
+      return [{ id: row.id, title: row.title, updatedAt: row.updatedAt }];
+    }
+    return [];
   }).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
@@ -133,6 +150,20 @@ export async function addProjectMessage(
   const message = ConversationMessageSchema.parse({ id: createId(), projectId, role, content, artifact, createdAt: Date.now() });
   const database = await getDatabase();
   await database.put("messages", message);
+  const existing = await database.get("projects", projectId);
+  if (!existing && role === "user" && content.trim()) {
+    await database.put("projects", {
+      id: projectId,
+      title: content.trim().slice(0, 42) + (content.trim().length > 42 ? "…" : ""),
+      updatedAt: Date.now(),
+      project: null,
+    });
+  } else if (existing) {
+    await database.put("projects", {
+      ...existing,
+      updatedAt: Date.now(),
+    });
+  }
   return message;
 }
 
