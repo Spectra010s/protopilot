@@ -1170,7 +1170,7 @@ function CopyCodeButton({ source }: { source: string }) {
 }
 
 function CopyablePre({ children }: { children: ReactNode }) {
-  const codeRef = useRef<HTMLElement | null>(null);
+  const codeRef = useRef<HTMLPreElement | null>(null);
   return (
     <div className="my-2 overflow-hidden rounded-lg bg-slate-950">
       <div className="flex justify-end border-b border-white/10 px-2 py-1">
