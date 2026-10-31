@@ -62,6 +62,7 @@ type View = "breadboard" | "schematic";
 
 export default function WorkbenchPage() {
   const [project, setProject] = useState<Project | null>(null);
+  const [sessionId, setSessionId] = useState(() => createId());
   const [view, setView] = useState<View>("breadboard");
   const [prompt, setPrompt] = useState("");
   const [activeGeneration, setActiveGeneration] = useState<string | null>(null);
@@ -81,7 +82,7 @@ export default function WorkbenchPage() {
   const diagramContainerRef = useRef<HTMLDivElement | null>(null);
   const generationControllerRef = useRef<AbortController | null>(null);
 
-  const conversation = conversations[pendingGeneration?.projectId ?? project?.id ?? ""] ?? [];
+  const conversation = conversations[project?.id ?? sessionId] ?? [];
   const checks = useMemo(() => (project ? validateElectrical(project) : []), [project]);
   const wiring = useMemo(() => (project ? deriveWiringTable(project) : []), [project]);
   const failCount = checks.filter((item) => item.status === "fail").length;
@@ -193,37 +194,39 @@ export default function WorkbenchPage() {
     }
   }
 
-  async function generateIdea(customPrompt?: string) {
-    const textToGenerate = (customPrompt ?? prompt).trim();
-    if (!textToGenerate) return;
-    const initialPrompt = textToGenerate;
-    const projectId = createId();
-    setActiveGeneration(initialPrompt);
+  async function sendMessage(message: string) {
+    const text = message.trim();
+    if (!text || busy) return;
+    const projectId = project?.id ?? sessionId;
+    const history = conversation.map(({ role, content }) => ({ role, content }));
+    setActiveGeneration(text);
     setChatReply(null);
     setBusy(true);
     setGenerationSeconds(0);
-    setNotice("Request sent to Gemma 4. Designing your circuit...");
+    setNotice("ProtoPilot is responding…");
+    setPrompt("");
+    setRevision("");
+    await recordMessage("user", text, projectId);
     const controller = new AbortController();
     generationControllerRef.current = controller;
     const timeout = window.setTimeout(() => controller.abort("timeout"), 180_000);
     const ticker = window.setInterval(() => setGenerationSeconds((seconds) => seconds + 1), 1000);
+    let answer = "";
     try {
-      const response = await fetch("/api/projects/generate", {
+      const response = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: initialPrompt, projectId }),
+        body: JSON.stringify({ message: text, projectId, project, history }),
         signal: controller.signal,
       });
       if (!response.ok) {
-        const errorBody = await response.json();
-        throw new Error(errorBody.error ?? "Generation failed");
+        const body = await response.json();
+        throw new Error(body.error ?? "ProtoPilot could not respond.");
       }
-      if (!response.body) throw new Error("Generation stream is unavailable.");
+      if (!response.body) throw new Error("Response stream is unavailable.");
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let body: { project: unknown; questions: string[] } | null = null;
-      let reply: string | null = null;
       while (true) {
         const { value, done } = await reader.read();
         buffer += decoder.decode(value, { stream: !done });
@@ -231,52 +234,35 @@ export default function WorkbenchPage() {
         buffer = lines.pop() ?? "";
         for (const line of lines) {
           if (!line.trim()) continue;
-          const event = JSON.parse(line) as { type: string; message?: string; error?: string; reply?: string; project?: unknown; questions?: string[] };
-          if (event.type === "status" && event.message) setNotice(event.message);
-          if (event.type === "error") throw new Error(event.error ?? "Generation failed");
-          if (event.type === "chat") reply = event.reply ?? "";
-          if (event.type === "result") body = { project: event.project, questions: event.questions ?? [] };
+          const event = JSON.parse(line) as { type: string; delta?: string; message?: string; error?: string; project?: unknown; view?: string };
+          if (event.type === "text" && event.delta) {
+            answer += event.delta;
+            setChatReply(answer);
+          } else if (event.type === "status" && event.message) {
+            setNotice(event.message);
+          } else if (event.type === "project" && event.project) {
+            const nextProject = ProjectSchema.parse(event.project);
+            setProject(nextProject);
+            setNotice(`Updated: ${nextProject.title}`);
+          } else if (event.type === "view") {
+            if (event.view === "breadboard" || event.view === "schematic") {
+              setView(event.view);
+              window.setTimeout(() => document.getElementById("circuit-diagram-container")?.scrollIntoView({ behavior: "smooth" }), 100);
+            } else if (event.view === "code") {
+              window.setTimeout(() => document.getElementById("firmware")?.scrollIntoView({ behavior: "smooth" }), 100);
+            }
+          } else if (event.type === "error") {
+            throw new Error(event.error ?? "ProtoPilot could not respond.");
+          }
         }
         if (done) break;
       }
-      if (reply !== null) {
-        setChatReply(reply);
-        setNotice("ProtoPilot replied.");
-        setPrompt("");
-        return;
-      }
-      if (!body) throw new Error("Gemma ended without a project response.");
-      await recordMessage("user", initialPrompt, projectId);
-      if (body.project) {
-        const nextProject = ProjectSchema.parse(body.project);
-        setProject(nextProject);
-        setPendingGeneration(null);
-        setNotice(`Generated: ${nextProject.title}`);
-        await recordMessage(
-          "assistant",
-          `Generated complete hardware plan for "${nextProject.title}". Verified against connection references, safety thresholds, and Arduino firmware.`,
-          projectId
-        );
-      } else {
-        const questions = (body.questions as string[])
-          ?.map((q) => q.trim())
-          .filter((q) => q.length >= 10 && q.length <= 280)
-          .slice(0, 3);
-        if (questions?.length) {
-          setPendingGeneration({ prompt: initialPrompt, projectId });
-          setNotice("Gemma needs clarification to finalize safe connections");
-          await recordMessage(
-            "assistant",
-            `Before generating the circuit, please clarify:\n\n${questions.map((q, i) => `${i + 1}. ${q}`).join("\n\n")}`,
-            projectId
-          );
-        } else {
-          setNotice("Please add more details about parts, sensors, or power and try again.");
-        }
-      }
-      setPrompt("");
+      if (answer.trim()) await recordMessage("assistant", answer, projectId);
+      setNotice("ProtoPilot replied.");
     } catch (error) {
-      setNotice(controller.signal.aborted ? controller.signal.reason === "cancelled" ? "Generation cancelled. You can try another prompt." : "Gemma took over 3 minutes. Please try again." : error instanceof Error ? error.message : "Could not generate design");
+      const message = controller.signal.aborted ? (controller.signal.reason === "cancelled" ? "Request cancelled." : "Gemma took too long. Please retry.") : error instanceof Error ? error.message : "ProtoPilot could not respond.";
+      setNotice(message);
+      if (!answer.trim()) await recordMessage("assistant", message, projectId);
     } finally {
       window.clearTimeout(timeout);
       window.clearInterval(ticker);
@@ -285,61 +271,12 @@ export default function WorkbenchPage() {
     }
   }
 
-  async function reviseProject() {
-    if (!revision.trim() || (!project && !pendingGeneration)) return;
-    setBusy(true);
-    const request = revision.trim();
-    const pending = pendingGeneration;
-    const projectId = pending?.projectId ?? project?.id;
-    if (!projectId) return;
-    await recordMessage("user", request, projectId);
-    try {
-      if (pending) {
-        const fullPrompt = `${pending.prompt}\n\nUSER CLARIFICATIONS:\n${request}`;
-        const response = await fetch("/api/projects/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: fullPrompt, projectId }),
-        });
-        const body = await response.json();
-        if (!response.ok) throw new Error(body.error ?? "Generation failed");
-        if (body.project) {
-          const nextProject = ProjectSchema.parse(body.project);
-          setProject(nextProject);
-          setPendingGeneration(null);
-          setNotice("Design created successfully");
-          await recordMessage("assistant", `Generated ${nextProject.title}.`, projectId);
-        } else {
-          const questions = (body.questions as string[] | undefined)?.filter((question) => question.trim());
-          setPendingGeneration({ ...pending, prompt: fullPrompt });
-          setNotice("Gemma needs more details to finish the design.");
-          if (questions?.length) {
-            await recordMessage("assistant", questions.join("\n\n"), projectId);
-          }
-        }
-        setRevision("");
-        return;
-      }
+  async function generateIdea(customPrompt?: string) {
+    await sendMessage(customPrompt ?? prompt);
+  }
 
-      if (!project) return;
-      const response = await fetch("/api/projects/revise", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project, request }),
-      });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? "Revision failed");
-      if (body.project) setProject(ProjectSchema.parse(body.project));
-      setNotice(body.message ?? "Project updated");
-      if (body.message) await recordMessage("assistant", body.message, projectId);
-      setRevision("");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Revision failed";
-      setNotice(message);
-      await recordMessage("assistant", message, projectId);
-    } finally {
-      setBusy(false);
-    }
+  async function reviseProject() {
+    await sendMessage(revision);
   }
 
   function startNewProject() {
@@ -350,6 +287,14 @@ export default function WorkbenchPage() {
     setPrompt("");
     setRevision("");
     setNotice("Canvas cleared. Describe what you'd like to build.");
+  }
+
+  function resetChat() {
+    setActiveGeneration(null);
+    setPendingGeneration(null);
+    setChatReply(null);
+    setPrompt("");
+    setRevision("");
   }
 
   async function copyFirmware() {
@@ -471,114 +416,239 @@ export default function WorkbenchPage() {
             Enter what you want to build. ProtoPilot will choose microcontroller pins, build stages, generate wiring netlists, Arduino code, and verify safety checks.
           </p>
 
-          <div className="mt-8 w-full max-w-[620px] rounded-2xl border border-line-strong bg-white p-5 shadow-panel text-left">
-            <label className="text-xs font-semibold text-ink-strong flex items-center gap-2 mb-2" htmlFor="initial-prompt">
-              <Sparkles size={15} className="text-brand" />
-              What circuit are you designing?
-            </label>
-            <textarea
-              id="initial-prompt"
-              rows={4}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="e.g. Build an ESP32-based plant watering system with a capacitive soil moisture sensor, MOSFET low-side switch for a 5V pump, and an emergency manual push button."
-              className="w-full resize-none rounded-xl border border-line-strong bg-inset p-3 text-[12px] text-ink outline-none focus:border-brand focus:shadow-focus"
-            />
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <span className="text-[10px] text-quiet">Gemma 4 checks electrical compatibility</span>
-              <button
-                type="button"
-                onClick={() => generateIdea()}
-                disabled={busy || !prompt.trim()}
-                className="inline-flex min-h-[36px] items-center justify-center gap-2 rounded-xl bg-brand px-4 text-[12px] font-semibold text-white shadow-button hover:bg-brand-strong disabled:opacity-50 cursor-pointer"
-              >
-                {busy ? <LoaderCircle className="animate-spin" size={16} /> : <Sparkles size={15} />}
-                {busy ? "Generating design…" : "Generate Hardware Design"}
-              </button>
-            </div>
-            {activeGeneration && (
-              <div className="mt-5 border-t border-line pt-5" aria-live="polite">
-                <p className="text-[10px] font-semibold text-quiet">You sent</p>
-                <p className="mt-1 rounded-xl bg-brand-soft p-3 text-xs text-ink-strong">{activeGeneration}</p>
-                <p className="mt-2 text-xs text-body">{busy ? `ProtoPilot is responding… ${generationSeconds}s` : notice}</p>
-                {chatReply && <p className="mt-2 rounded-xl border border-line bg-subtle p-3 text-xs text-body">{chatReply}</p>}
-                {busy && <button type="button" className="mt-2 text-xs font-semibold text-brand" onClick={() => generationControllerRef.current?.abort("cancelled")}>Cancel request</button>}
-              </div>
-            )}
-            {pendingGeneration && (
-              <div className="mt-5 border-t border-line pt-5">
-                <p className="mb-2 text-xs font-semibold text-ink-strong">Answer Gemma’s questions</p>
-                <p className="mb-3 whitespace-pre-line text-xs text-body">{conversation.at(-1)?.content}</p>
-                <label className="sr-only" htmlFor="clarification-answer">Your answers</label>
-                <textarea
-                  id="clarification-answer"
-                  rows={3}
-                  value={revision}
-                  onChange={(event) => setRevision(event.target.value)}
-                  placeholder="Add the requested details here…"
-                  className="w-full resize-none rounded-xl border border-line-strong bg-inset p-3 text-xs text-ink outline-none focus:border-brand focus:shadow-focus"
-                />
+          {!activeGeneration && !busy && !pendingGeneration && conversation.length === 0 ? (
+            /* Initial Prompt Form before chat starts */
+            <div className="mt-8 w-full max-w-[620px] rounded-2xl border border-line-strong bg-white p-5 shadow-panel text-left">
+              <label className="text-xs font-semibold text-ink-strong flex items-center gap-2 mb-2" htmlFor="initial-prompt">
+                <Sparkles size={15} className="text-brand" />
+                What circuit are you designing?
+              </label>
+              <textarea
+                id="initial-prompt"
+                rows={4}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="e.g. Build an ESP32-based plant watering system with a capacitive soil moisture sensor, MOSFET low-side switch for a 5V pump, and an emergency manual push button."
+                className="w-full resize-none rounded-xl border border-line-strong bg-inset p-3 text-[12px] text-ink outline-none focus:border-brand focus:shadow-focus"
+              />
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <span className="text-[10px] text-quiet">Gemma 4 checks electrical compatibility</span>
                 <button
                   type="button"
-                  onClick={() => void reviseProject()}
-                  disabled={busy || !revision.trim()}
-                  className="mt-3 rounded-xl bg-brand px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                  onClick={() => generateIdea()}
+                  disabled={busy || !prompt.trim()}
+                  className="inline-flex min-h-[36px] items-center justify-center gap-2 rounded-xl bg-brand px-4 text-[12px] font-semibold text-white shadow-button hover:bg-brand-strong disabled:opacity-50 cursor-pointer"
                 >
-                  Continue design
+                  {busy ? <LoaderCircle className="animate-spin" size={16} /> : <Sparkles size={15} />}
+                  {busy ? "Generating design…" : "Generate Hardware Design"}
                 </button>
               </div>
-            )}
-          </div>
-
-          {/* 4 Separate Standalone Starter Cards Underneath */}
-          <div className="mt-8 w-full max-w-[620px]">
-            <p className="text-[11px] font-semibold tracking-wider text-faint uppercase mb-3 text-left">
-              Or pick an idea to start:
-            </p>
-            <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
-              {[
-                {
-                  title: "Smart Plant Watering",
-                  prompt: "I want to build a smart plant watering system with a capacitive soil moisture sensor, ESP32, low-side MOSFET switch for a 5V pump, flyback diode, and a manual watering button.",
-                  icon: <Sprout size={16} className="text-brand shrink-0" />,
-                },
-                {
-                  title: "Weather & Environment",
-                  prompt: "Can you design a weather station with an ESP32, DHT22 temperature and humidity sensor, and a status LED that turns on when humidity exceeds 70%?",
-                  icon: <Activity size={16} className="text-brand shrink-0" />,
-                },
-                {
-                  title: "Obstacle Avoidance Rover",
-                  prompt: "I want to build an obstacle avoidance system using an HC-SR04 ultrasonic sensor, buzzer alert, and an ESP32 microcontroller with a motor driver stage.",
-                  icon: <Bot size={16} className="text-brand shrink-0" />,
-                },
-                {
-                  title: "Motion-Activated Nightlight",
-                  prompt: "Can you build a PIR motion sensor nightlight with an ESP32, logic-level transistor switch for high-power LED strips, and adjustable cooldown in firmware?",
-                  icon: <Zap size={16} className="text-brand shrink-0" />,
-                },
-              ].map((item) => (
-                <button
-                  key={item.title}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    setPrompt(item.prompt);
-                    generateIdea(item.prompt);
-                  }}
-                  className="flex flex-col text-left rounded-xl border border-line bg-white p-4 shadow-panel hover:border-brand hover:shadow-focus transition cursor-pointer group disabled:opacity-50"
-                >
-                  <div className="flex items-center gap-2 text-xs font-semibold text-ink-strong group-hover:text-brand">
-                    {item.icon}
-                    <span>{item.title}</span>
+            </div>
+          ) : (
+            /* Dedicated Normal Chat UI once chat has started */
+            <div className="mt-8 w-full max-w-[640px] rounded-2xl border border-line-strong bg-white shadow-panel overflow-hidden text-left flex flex-col" aria-live="polite">
+              {/* Chat Header */}
+              <div className="flex items-center justify-between border-b border-line px-5 py-3.5 bg-subtle/50">
+                <div className="flex items-center gap-2.5">
+                  <div className="grid size-7 place-items-center rounded-lg bg-brand-soft text-brand">
+                    <Bot size={16} />
                   </div>
-                  <p className="mt-1.5 text-[11px] leading-relaxed text-body line-clamp-2">
-                    &ldquo;{item.prompt}&rdquo;
-                  </p>
-                </button>
-              ))}
+                  <div>
+                    <h3 className="text-xs font-semibold text-ink-strong">Hardware Design Assistant</h3>
+                    <p className="text-[10px] text-faint flex items-center gap-1.5">
+                      <span className={cn("inline-block size-1.5 rounded-full", busy ? "bg-amber-500 animate-pulse" : "bg-pass")} />
+                      {busy ? `Gemma 4 is designing… (${generationSeconds}s)` : "Gemma 4 · Online"}
+                    </p>
+                  </div>
+                </div>
+                {!busy && (
+                  <button
+                    type="button"
+                    onClick={resetChat}
+                    className="text-[11px] font-medium text-quiet hover:text-ink cursor-pointer"
+                  >
+                    Start Over
+                  </button>
+                )}
+              </div>
+
+              {/* Chat Messages Body */}
+              <div className="p-5 space-y-4 max-h-[440px] overflow-y-auto">
+                {conversation.length > 0 ? (
+                  conversation.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={cn("flex gap-2.5", msg.role === "user" ? "justify-end" : "justify-start")}
+                    >
+                      {msg.role !== "user" && (
+                        <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand mt-0.5">
+                          <Bot size={15} />
+                        </div>
+                      )}
+                      <div
+                        className={cn(
+                          "rounded-2xl px-4 py-2.5 text-xs leading-relaxed max-w-[85%]",
+                          msg.role === "user"
+                            ? "rounded-tr-sm bg-brand text-white shadow-sm"
+                            : "rounded-tl-sm border border-line-soft bg-subtle text-ink-strong shadow-xs"
+                        )}
+                      >
+                        <p className="whitespace-pre-line">{msg.content}</p>
+                        <span className={cn("block mt-1 text-[9px]", msg.role === "user" ? "text-white/70 text-right" : "text-faint")}>
+                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : activeGeneration ? (
+                  <div className="flex justify-end gap-2.5">
+                    <div className="rounded-2xl rounded-tr-sm bg-brand px-4 py-2.5 text-xs text-white max-w-[85%] shadow-sm leading-relaxed">
+                      <p className="whitespace-pre-line">{activeGeneration}</p>
+                      <span className="block mt-1 text-[9px] text-white/70 text-right">Just now</span>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Assistant Working Bubble */}
+                {busy && (
+                  <div className="flex items-start gap-2.5">
+                    <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand mt-0.5">
+                      <Bot size={15} />
+                    </div>
+                    <div className="rounded-2xl rounded-tl-sm border border-line-soft bg-subtle px-4 py-3 text-xs text-ink-strong max-w-[85%] shadow-xs space-y-2">
+                      <div className="flex items-center gap-2 font-medium text-brand">
+                        <LoaderCircle className="animate-spin" size={14} />
+                        <span>Gemma 4 is designing your circuit… ({generationSeconds}s)</span>
+                      </div>
+                      {notice && <p className="text-[11px] text-body">{notice}</p>}
+                      <button
+                        type="button"
+                        onClick={() => generationControllerRef.current?.abort("cancelled")}
+                        className="text-[11px] text-faint hover:text-red-500 underline cursor-pointer"
+                      >
+                        Cancel request
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Clarification prompt if pending */}
+                {pendingGeneration && (
+                  <div className="flex items-start gap-2.5">
+                    <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand mt-0.5">
+                      <Bot size={15} />
+                    </div>
+                    <div className="rounded-2xl rounded-tl-sm border border-line-soft bg-subtle px-4 py-3 text-xs text-ink-strong max-w-[85%] shadow-xs space-y-1.5">
+                      <p className="font-semibold text-ink-strong">Answer Gemma’s questions</p>
+                      <p className="whitespace-pre-line text-body">{conversation.at(-1)?.content}</p>
+                    </div>
+                  </div>
+                )}
+
+                {chatReply && !conversation.some((m) => m.content === chatReply) && (
+                  <div className="flex items-start gap-2.5">
+                    <div className="grid size-7 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand mt-0.5">
+                      <Bot size={15} />
+                    </div>
+                    <div className="rounded-2xl rounded-tl-sm border border-line-soft bg-subtle px-4 py-3 text-xs text-ink-strong max-w-[85%] shadow-xs">
+                      <p className="whitespace-pre-line leading-relaxed">{chatReply}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Chat Input Footer */}
+              <div className="border-t border-line p-3 bg-white">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (pendingGeneration) {
+                      void reviseProject();
+                    } else if (prompt.trim()) {
+                      void generateIdea(prompt);
+                    }
+                  }}
+                  className="flex gap-2"
+                >
+                  <label className="sr-only" htmlFor="chat-reply-input">
+                    {pendingGeneration ? "Your answers" : "Your message"}
+                  </label>
+                  <textarea
+                    id="chat-reply-input"
+                    rows={2}
+                    value={pendingGeneration ? revision : prompt}
+                    onChange={(e) => {
+                      if (pendingGeneration) setRevision(e.target.value);
+                      else setPrompt(e.target.value);
+                    }}
+                    disabled={busy}
+                    placeholder={pendingGeneration ? "Answer Gemma’s questions to continue…" : "Type your design prompt or request…"}
+                    className="w-full resize-none rounded-xl border border-line-strong bg-inset p-3 text-xs text-ink outline-none focus:border-brand focus:shadow-focus"
+                  />
+                  <button
+                    type="submit"
+                    disabled={busy || (pendingGeneration ? !revision.trim() : !prompt.trim())}
+                    className="self-end inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand px-4 text-xs font-semibold text-white shadow-button hover:bg-brand-strong disabled:opacity-50 cursor-pointer shrink-0"
+                  >
+                    {busy ? <LoaderCircle className="animate-spin" size={14} /> : <Send size={13} />}
+                    <span>Send</span>
+                  </button>
+                </form>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* 4 Separate Standalone Starter Cards Underneath (ONLY shown before chat starts) */}
+          {!activeGeneration && !busy && !pendingGeneration && conversation.length === 0 && (
+            <div className="mt-8 w-full max-w-[620px]">
+              <p className="text-[11px] font-semibold tracking-wider text-faint uppercase mb-3 text-left">
+                Or pick an idea to start:
+              </p>
+              <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
+                {[
+                  {
+                    title: "Smart Plant Watering",
+                    prompt: "I want to build a smart plant watering system with a capacitive soil moisture sensor, ESP32, low-side MOSFET switch for a 5V pump, flyback diode, and a manual watering button.",
+                    icon: <Sprout size={16} className="text-brand shrink-0" />,
+                  },
+                  {
+                    title: "Weather & Environment",
+                    prompt: "Can you design a weather station with an ESP32, DHT22 temperature and humidity sensor, and a status LED that turns on when humidity exceeds 70%?",
+                    icon: <Activity size={16} className="text-brand shrink-0" />,
+                  },
+                  {
+                    title: "Obstacle Avoidance Rover",
+                    prompt: "I want to build an obstacle avoidance system using an HC-SR04 ultrasonic sensor, buzzer alert, and an ESP32 microcontroller with a motor driver stage.",
+                    icon: <Bot size={16} className="text-brand shrink-0" />,
+                  },
+                  {
+                    title: "Motion-Activated Nightlight",
+                    prompt: "Can you build a PIR motion sensor nightlight with an ESP32, logic-level transistor switch for high-power LED strips, and adjustable cooldown in firmware?",
+                    icon: <Zap size={16} className="text-brand shrink-0" />,
+                  },
+                ].map((item) => (
+                  <button
+                    key={item.title}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setPrompt(item.prompt);
+                      generateIdea(item.prompt);
+                    }}
+                    className="flex flex-col text-left rounded-xl border border-line bg-white p-4 shadow-panel hover:border-brand hover:shadow-focus transition cursor-pointer group disabled:opacity-50"
+                  >
+                    <div className="flex items-center gap-2 text-xs font-semibold text-ink-strong group-hover:text-brand">
+                      {item.icon}
+                      <span>{item.title}</span>
+                    </div>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-body line-clamp-2">
+                      &ldquo;{item.prompt}&rdquo;
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </main>
       ) : (
         /* Full Active Project Workbench */
