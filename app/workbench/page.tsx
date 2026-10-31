@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Activity,
   ArrowDownRight,
@@ -485,7 +487,7 @@ export default function WorkbenchPage() {
                             : "rounded-tl-sm border border-line-soft bg-subtle text-ink-strong shadow-xs"
                         )}
                       >
-                        {msg.content && <p className="whitespace-pre-line">{msg.content}</p>}
+                        {msg.content && (msg.role === "assistant" ? <AssistantMarkdown>{msg.content}</AssistantMarkdown> : <p className="whitespace-pre-line">{msg.content}</p>)}
                         {msg.artifact && <ChatArtifact artifact={msg.artifact} onExpand={() => setExpandedArtifact(msg.artifact ?? null)} />}
                         <span className={cn("block mt-1 text-[9px]", msg.role === "user" ? "text-white/70 text-right" : "text-faint")}>
                           {new Date(msg.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
@@ -531,7 +533,7 @@ export default function WorkbenchPage() {
                       <Bot size={15} />
                     </div>
                     <div className="rounded-2xl rounded-tl-sm border border-line-soft bg-subtle px-4 py-3 text-xs text-ink-strong max-w-[85%] shadow-xs">
-                      <p className="whitespace-pre-line leading-relaxed">{chatReply}</p>
+                      <AssistantMarkdown>{chatReply}</AssistantMarkdown>
                     </div>
                   </div>
                 )}
@@ -963,7 +965,7 @@ export default function WorkbenchPage() {
                       )}
                       key={message.id}
                     >
-                      {message.content && <p>{message.content}</p>}
+                      {message.content && (message.role === "assistant" ? <AssistantMarkdown>{message.content}</AssistantMarkdown> : <p>{message.content}</p>)}
                       {message.artifact && <ChatArtifact artifact={message.artifact} onExpand={() => setExpandedArtifact(message.artifact ?? null)} />}
                       <span>{message.role === "user" ? "You" : "Assistant"} · {new Date(message.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
                     </div>
@@ -1109,6 +1111,7 @@ export default function WorkbenchPage() {
           <div className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
               <strong className="text-sm text-ink-strong">{expandedArtifact.kind === "code" ? expandedArtifact.project.firmware.filename : expandedArtifact.kind === "schematic" ? "Schematic" : "Circuit diagram"}</strong>
+              {expandedArtifact.kind === "code" && <CopyCodeButton source={expandedArtifact.project.firmware.source} />}
               <button type="button" className="rounded-lg p-2 text-body hover:bg-subtle" onClick={() => setExpandedArtifact(null)} aria-label="Close expanded view"><X size={18} /></button>
             </div>
             <div className="overflow-auto p-3">
@@ -1133,7 +1136,10 @@ function ChatArtifact({ artifact, onExpand }: { artifact: NonNullable<ProjectCon
     <div className="mt-2 min-w-0 overflow-hidden rounded-xl border border-line bg-white text-left">
       <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
         <strong className="truncate text-[11px] font-semibold text-ink-strong">{label}</strong>
-        <button type="button" onClick={onExpand} className="shrink-0 rounded-md border border-line px-2 py-1 text-[10px] font-medium text-brand hover:bg-brand-soft">Expand</button>
+        <div className="flex shrink-0 items-center gap-1">
+          {artifact.kind === "code" && <CopyCodeButton source={artifact.project.firmware.source} />}
+          <button type="button" onClick={onExpand} className="rounded-md border border-line px-2 py-1 text-[10px] font-medium text-brand hover:bg-brand-soft">Expand</button>
+        </div>
       </div>
       {artifact.kind === "code" ? (
         <pre className="max-h-48 overflow-auto bg-slate-950 p-3 text-[10px] leading-relaxed text-slate-100"><code>{artifact.project.firmware.source}</code></pre>
@@ -1142,6 +1148,43 @@ function ChatArtifact({ artifact, onExpand }: { artifact: NonNullable<ProjectCon
           {artifact.kind === "schematic" ? <SchematicView project={artifact.project} /> : <BreadboardView project={artifact.project} />}
         </button>
       )}
+    </div>
+  );
+}
+
+function CopyCodeButton({ source }: { source: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[10px] font-medium text-brand hover:bg-brand-soft"
+      onClick={async () => {
+        await navigator.clipboard.writeText(source);
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1600);
+      }}
+    >
+      {copied ? <Check size={12} /> : <Copy size={12} />}{copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
+function CopyablePre({ children }: { children: ReactNode }) {
+  const codeRef = useRef<HTMLElement | null>(null);
+  return (
+    <div className="my-2 overflow-hidden rounded-lg bg-slate-950">
+      <div className="flex justify-end border-b border-white/10 px-2 py-1">
+        <button type="button" className="text-[10px] text-slate-200 hover:text-white" onClick={() => void navigator.clipboard.writeText(codeRef.current?.textContent ?? "")}>Copy code</button>
+      </div>
+      <pre ref={codeRef} className="overflow-auto p-3 text-[10px] leading-relaxed text-slate-100">{children}</pre>
+    </div>
+  );
+}
+
+function AssistantMarkdown({ children }: { children: string }) {
+  return (
+    <div className="min-w-0 text-left [&_p]:my-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-4 [&_a]:text-brand [&_a]:underline [&_strong]:font-semibold [&_h1]:my-2 [&_h1]:font-bold [&_h2]:my-2 [&_h2]:font-bold [&_h3]:my-2 [&_h3]:font-bold [&_code]:font-mono">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ pre: ({ children: content }) => <CopyablePre>{content}</CopyablePre> }}>{children}</ReactMarkdown>
     </div>
   );
 }

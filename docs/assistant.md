@@ -26,6 +26,8 @@ The response is newline-delimited JSON (`application/x-ndjson`). Events are:
 
 The workbench stores text and artifact messages in IndexedDB by project ID. Artifacts contain a project snapshot so an older chat result still shows the design from that turn. A new blank conversation receives its own ID; the first design created in it uses that same ID. The current design remains saved separately as a draft.
 
+Assistant text is rendered as GitHub-flavored Markdown. Fenced code blocks and generated firmware cards have copy controls. Diagram and schematic cards open into an expanded view when clicked.
+
 ## Current boundary
 
 The assistant's actions are limited to the design model and its existing visualizations. `saveDesign` replaces the full design from a compact plan rather than applying a component-level patch. A new design must contain usable connections; invalid plans return an error and leave the current draft in place.
