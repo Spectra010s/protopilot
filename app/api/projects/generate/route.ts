@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { AiRequest, getProjectProvider } from "@/lib/ai/provider";
+import { expandProject } from "@/lib/ai/compact-project";
 
 export async function POST(request: Request) {
   const raw = await request.json().catch(() => null);
@@ -16,8 +17,8 @@ export async function POST(request: Request) {
           send({ type: "status", message: "Gemma is designing your circuit." });
           let lastProgress = "";
           for await (const partial of result.partialOutputStream) {
-            const title = partial.project?.title;
-            const count = partial.project?.components?.length ?? 0;
+            const title = partial.title;
+            const count = partial.components?.length ?? 0;
             const message = title ? `Designing ${title}${count ? ` · ${count} components` : ""}` : count ? `Designing ${count} components` : "";
             if (message && message !== lastProgress) {
               send({ type: "status", message });
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
             }
           }
           const output = await result.output;
-          send({ type: "result", project: output.project && parsed.data.projectId ? { ...output.project, id: parsed.data.projectId } : output.project, questions: output.questions });
+          send({ type: "result", project: expandProject(output, parsed.data.prompt, parsed.data.projectId), questions: [] });
         } catch (error) {
           send({ type: "error", error: error instanceof Error ? error.message : "Project generation failed." });
         } finally {

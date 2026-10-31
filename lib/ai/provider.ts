@@ -2,6 +2,7 @@ import { createGoogle } from "@ai-sdk/google";
 import { generateText, streamText, Output } from "ai";
 import { z } from "zod";
 import { ProjectSchema, type Project } from "@/lib/project/schema";
+import { CompactProjectSchema } from "@/lib/ai/compact-project";
 
 const GenerationRequestSchema = z.object({ prompt: z.string().trim().min(8).max(8000), projectId: z.string().min(1).optional(), constraints: z.object({ controller: z.string().optional(), available: z.array(z.string()).optional(), budget: z.string().optional(), requirements: z.array(z.string()).optional() }).optional() });
 const RevisionRequestSchema = z.object({ project: ProjectSchema, request: z.string().trim().min(2).max(2000) });
@@ -60,8 +61,8 @@ ${JSON.stringify(request.constraints ?? {})}`, GenerationOutputSchema);
     return streamText({
       model: this.model,
       instructions: DESIGN_INSTRUCTIONS,
-      prompt: `Generate a complete project matching the schema for this request. Keep descriptions and firmware concise. Use unknown ratings when exact parts are not supplied. Return questions only if the request is impossible to design safely.\nUSER REQUEST:\n${request.prompt}\nOPTIONAL CONSTRAINTS:\n${JSON.stringify(request.constraints ?? {})}`,
-      output: Output.object({ schema: GenerationOutputSchema }),
+      prompt: `Create a compact, wiring-ready circuit plan for this request. Use 3 to 8 components. Include only the pins used by connections, and refer to components by their zero-based array indexes. Every connection must use a pin ID listed on that component. Keep firmware under 40 lines. Never connect a motor or pump directly to a controller GPIO; include a driver, flyback protection, separate load supply, and common ground where needed. Do not invent confirmed ratings.\nUSER REQUEST:\n${request.prompt}\nOPTIONAL CONSTRAINTS:\n${JSON.stringify(request.constraints ?? {})}`,
+      output: Output.object({ schema: CompactProjectSchema }),
       temperature: 0.2,
       maxOutputTokens: 8192,
       providerOptions: { google: { thinkingConfig: { thinkingLevel: "minimal" } } },
