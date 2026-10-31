@@ -1000,8 +1000,7 @@ export default function WorkbenchPage() {
       <Sheet open={libraryOpen} onOpenChange={setLibraryOpen}>
         <SheetContent side="left" className="w-[340px] sm:w-[400px] p-0 flex flex-col bg-white">
           <SheetHeader className="px-5 py-4 border-b border-line text-left">
-            <p className="m-0 text-[10px] font-bold tracking-[.11em] text-faint uppercase">Saved Locally</p>
-            <SheetTitle className="text-[17px] font-bold tracking-tight text-ink mt-0.5">My Projects</SheetTitle>
+            <SheetTitle className="text-[17px] font-bold tracking-tight text-ink">My Projects</SheetTitle>
             <SheetDescription className="text-[11px] text-quiet">
               Stored locally on this device. Select a design to load it into the workbench.
             </SheetDescription>
