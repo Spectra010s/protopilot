@@ -28,7 +28,7 @@ export default function LandingPage() {
       {/* ── Hero ── */}
       <section className={"mx-auto flex max-w-[920px] flex-col items-center px-6 pt-20 pb-16 text-center max-[760px]:pt-14 max-[760px]:pb-10"}>
         <div className={"mb-6 inline-flex items-center gap-2 rounded-full border border-line-strong bg-white px-3.5 py-1.5 text-[11px] font-medium text-body shadow-panel"}>
-          <Sparkles size={14} className="text-brand" />
+          <CircuitBoard size={14} className="text-brand" />
           Powered by Gemma 4 · Local-First Storage
         </div>
         <h1 className={"m-0 text-[46px] font-bold leading-[1.1] tracking-[-.04em] text-ink max-[760px]:text-[32px]"}>
@@ -216,7 +216,7 @@ export default function LandingPage() {
       <section className={"border-t border-line bg-white py-20 max-[760px]:py-14"}>
         <div className={"mx-auto flex max-w-[600px] flex-col items-center px-6 text-center"}>
           <div className={"mb-5 grid size-[56px] place-items-center rounded-2xl bg-brand-soft text-brand"}>
-            <Sparkles size={28} />
+            <FlaskConical size={28} />
           </div>
           <h2 className={"m-0 text-[28px] font-bold tracking-[-.03em] text-ink max-[760px]:text-[22px]"}>
             Ready to build your next circuit?
