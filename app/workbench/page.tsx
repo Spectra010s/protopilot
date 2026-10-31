@@ -994,32 +994,48 @@ export default function WorkbenchPage() {
             {workbenchSubView === "circuit" && (
                 /* ── Fullscreen Circuit Canvas View ── */
                 <div className="flex h-[calc(100vh-125px)] flex-col bg-canvas">
-                  <div className="flex items-center justify-between border-b border-line bg-white px-6 py-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-white px-4 py-2.5 sm:px-6">
                     <button
                       type="button"
                       onClick={() => setWorkbenchSubView("overview")}
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-quiet hover:text-brand cursor-pointer"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-body hover:bg-subtle cursor-pointer transition shrink-0"
                     >
                       <ArrowLeft size={14} /> Back to Overview
                     </button>
 
-                    <Tabs value={view} onValueChange={(val) => setView(val as View)}>
-                      <TabsList className="inline-flex items-center gap-1">
-                        <TabsTrigger value="breadboard" className="inline-flex h-[28px] items-center gap-1.5 rounded-md px-2.5 text-xs text-quiet data-[active]:bg-brand-soft data-[active]:font-semibold data-[active]:text-brand cursor-pointer">
-                          <CircuitBoard size={14} /> Breadboard View
-                        </TabsTrigger>
-                        <TabsTrigger value="schematic" className="inline-flex h-[28px] items-center gap-1.5 rounded-md px-2.5 text-xs text-quiet data-[active]:bg-brand-soft data-[active]:font-semibold data-[active]:text-brand cursor-pointer">
-                          <FlaskConical size={14} /> Schematic View
-                        </TabsTrigger>
-                      </TabsList>
-                    </Tabs>
+                    <div className="flex items-center rounded-xl bg-chip/80 p-1 border border-line-soft shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setView("breadboard")}
+                        className={cn(
+                          "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer",
+                          view === "breadboard" ? "bg-white text-ink-strong shadow-xs" : "text-quiet hover:text-ink"
+                        )}
+                      >
+                        <CircuitBoard size={14} className={view === "breadboard" ? "text-brand" : ""} />
+                        <span>Breadboard</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setView("schematic")}
+                        className={cn(
+                          "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer",
+                          view === "schematic" ? "bg-white text-ink-strong shadow-xs" : "text-quiet hover:text-ink"
+                        )}
+                      >
+                        <FlaskConical size={14} className={view === "schematic" ? "text-brand" : ""} />
+                        <span>Schematic</span>
+                      </button>
+                    </div>
 
                     <button
                       type="button"
                       onClick={downloadDiagram}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-body hover:bg-subtle cursor-pointer"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-body hover:bg-subtle cursor-pointer transition shrink-0"
+                      title={`Download ${view} SVG`}
                     >
-                      <Download size={13} /> Download SVG
+                      <Download size={13} />
+                      <span className="hidden sm:inline">Download</span> SVG
                     </button>
                   </div>
 
@@ -1039,7 +1055,7 @@ export default function WorkbenchPage() {
                     <button
                       type="button"
                       onClick={() => setWorkbenchSubView("overview")}
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-white cursor-pointer"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-white/20 cursor-pointer transition shrink-0"
                     >
                       <ArrowLeft size={14} /> Back to Overview
                     </button>
@@ -1085,7 +1101,7 @@ export default function WorkbenchPage() {
                       <button
                         type="button"
                         onClick={() => setWorkbenchSubView("overview")}
-                        className="inline-flex items-center gap-1.5 text-xs font-medium text-quiet hover:text-brand cursor-pointer"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-body hover:bg-subtle cursor-pointer transition shrink-0"
                       >
                         <ArrowLeft size={14} /> Back to Overview
                       </button>
