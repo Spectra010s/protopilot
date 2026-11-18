@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import rehypeHighlight from "rehype-highlight";
 import {
   Activity,
   ArrowDownRight,
@@ -985,7 +988,10 @@ export default function WorkbenchPage() {
                         </div>
                         <div className="flex-1 p-4 space-y-1.5">
                           {project.warnings.slice(0, 3).map((w, i) => (
-                            <p key={i} className="text-[11px] text-amber-800 leading-relaxed line-clamp-2">⚠ {w}</p>
+                            <p key={i} className="flex items-start text-[11px] text-amber-800 leading-relaxed line-clamp-2">
+                              <CircleHelp size={12} className="shrink-0 text-amber-600 mt-0.5 mr-1.5" />
+                              <span>{w}</span>
+                            </p>
                           ))}
                           {project.warnings.length > 3 && (
                             <p className="text-[10px] text-faint">+{project.warnings.length - 3} more</p>
@@ -1584,7 +1590,13 @@ function CopyablePre({ children }: { children: ReactNode }) {
 function AssistantMarkdown({ children }: { children: string }) {
   return (
     <div className="min-w-0 text-left [&_p]:my-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-4 [&_a]:text-brand [&_a]:underline [&_strong]:font-semibold [&_h1]:my-2 [&_h1]:font-bold [&_h2]:my-2 [&_h2]:font-bold [&_h3]:my-2 [&_h3]:font-bold [&_code]:font-mono">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ pre: ({ children: content }) => <CopyablePre>{content}</CopyablePre> }}>{children}</ReactMarkdown>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex, rehypeHighlight]}
+        components={{ pre: ({ children: content }) => <CopyablePre>{content}</CopyablePre> }}
+      >
+        {children}
+      </ReactMarkdown>
     </div>
   );
 }
